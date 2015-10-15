@@ -1,11 +1,10 @@
+CommonBehavior.Endpoints=tcp -p 1
+
+
 # Proxies for required interfaces
-RGBDProxy = rgbd:tcp -h localhost -p 0
 DifferentialRobotProxy = differentialrobot:tcp -h localhost -p 0
+RGBDProxy = rgbd:tcp -h localhost -p 0
 
-
-
-# This property is used by the clients to connect to IceStorm.
-TopicManager.Proxy=IceStorm/TopicManager:default -p 9999
 
 
 Ice.Warn.Connections=0

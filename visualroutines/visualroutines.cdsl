@@ -1,0 +1,13 @@
+import "/robocomp/interfaces/IDSLs/DifferentialRobot.idsl";
+import "/robocomp/interfaces/IDSLs/RGBD.idsl";
+
+Component VisualRoutines
+{
+	Communications
+	{
+		requires RGBD, DifferentialRobot;
+	};
+	language Python;
+	gui Qt(QWidget);
+};
+

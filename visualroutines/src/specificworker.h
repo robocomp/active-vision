@@ -24,15 +24,16 @@
 
 
 
-
-
-
-
 #ifndef SPECIFICWORKER_H
 #define SPECIFICWORKER_H
 
 #include <genericworker.h>
 #include <innermodel/innermodel.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
+using namespace cv;
 
 class SpecificWorker : public GenericWorker
 {
@@ -47,6 +48,7 @@ public slots:
 	void compute(); 	
 
 private:
+	InnerModel *innerModel;
 	
 };
 

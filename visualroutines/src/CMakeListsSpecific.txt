@@ -12,7 +12,7 @@ SET ( HEADERS
   specificmonitor.h
 #  $ENV{ROBOCOMP}/classes/agmInner/agmInner.h
 )
-
+INCLUDE($ENV{ROBOCOMP}/cmake/modules/opencv2.cmake)
 INCLUDE($ENV{ROBOCOMP}/cmake/modules/ipp.cmake)
 
 ADD_DEFINITIONS( -std=c++11 )

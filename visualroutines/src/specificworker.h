@@ -32,6 +32,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include "harrisdetector.h"
 
 using namespace cv;
 
@@ -49,6 +50,10 @@ public slots:
 
 private:
 	InnerModel *innerModel;
+	HarrisDetector harrisdetector;
+	
+	Mat canny(const Mat &img);
+	Mat hough(const Mat &img);
 	
 };
 

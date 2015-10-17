@@ -15,27 +15,24 @@
  * 
  */
 
-#ifndef TABLETYPE_H
-#define TABLETYPE_H
+#ifndef LEGTYPE_H
+#define LEGTYPE_H
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <innermodel/innermodel.h>
-#include "legtype.h"
 
-class TableType
+class LegType
 {
-	public:
-		TableType();
-		TableType(const TableType& other);
-		~TableType();
-		cv::Mat render(cv::Mat& frame, InnerModel* innerModel);
-		
-		float height, length, width, topThickness, legWidth;
+public:
+	LegType(const QString &_name, const QVec &offset, float _length=800, float _width=70);
+	LegType(const LegType& other);
+	~LegType();
 	
-	private:
-		
-		QList< LegType*> legs;
+	QString name;
+	QVec offset;
+	float width, length;
+	void render(cv::Mat& frame, InnerModel* innerModel, const QString &parent, std::vector< std::vector < cv::Point> > &lines);
 };
 
-#endif // TABLETYPE_H
+#endif // LEGTYPE_H

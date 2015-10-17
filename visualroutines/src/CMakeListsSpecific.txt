@@ -6,6 +6,7 @@ SET ( SOURCES
 #  $ENV{ROBOCOMP}/classes/agmInner/agmInner.cpp
 	harrisdetector.cpp
 	tabletype.cpp
+	legtype.cpp
 )
 
 # Headers set

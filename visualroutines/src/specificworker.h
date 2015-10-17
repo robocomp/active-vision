@@ -34,6 +34,8 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include "harrisdetector.h"
 
+
+
 using namespace cv;
 
 class SpecificWorker : public GenericWorker
@@ -47,13 +49,23 @@ public:
 
 public slots:
 	void compute(); 	
+	
 
 private:
 	InnerModel *innerModel;
 	HarrisDetector harrisdetector;
 	
-	Mat canny(const Mat &img);
-	Mat hough(const Mat &img);
+// 	Mat canny(const Mat &img);
+// 	Mat hough(const Mat &img);
+	void initMachine();
+	tuple< Mat, Mat, Mat, PointSeq > getImage();
+	void  computeHarrisCorners(const Mat& img, vector< cv::Point> &points);
+	vector< Point > filterTable(const PointSeq &pointSeq, const vector< Point >& points);
+	
+	//QStateMachine machine;
+	
+	enum class State {INIT, GETIMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW};
+	State state = State::INIT;
 	
 };
 

@@ -23,7 +23,7 @@
 */
 SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 {
-	//namedWindow( "Display window", 1 );// Create a window for display.
+	//initMachine();
 }
 
 /**
@@ -61,81 +61,107 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	{
 		qFatal("Error reading config params");
 	}
-	timer.setSingleShot(true);
+	//timer.setSingleShot(true);
 	timer.start(Period);
 
 	return true;
 }
 
+
 void SpecificWorker::compute()
 {
+	static Mat gray, depth, frame;
+	static std::vector<cv::Point> points;
+	static PointSeq pointSeq;
+	
+	switch( state )
+	{
+		case State::INIT:
+			qDebug() << "State::INIT";
+			state = State::GETIMAGE;
+			break;
+		case State::GETIMAGE:
+			tie(frame, gray, depth, pointSeq) = getImage();
+			//imshow("Color", frame);
+			state = State::HARRIS;
+			break;
+		case  State::HARRIS:
+			computeHarrisCorners( gray, points );
+			computeHarrisCorners( depth, points );
+			state = State::FILTER_TABLE_HEIGHT;
+			break;
+		case State::FILTER_TABLE_HEIGHT:
+			points = filterTable( pointSeq , points);
+			state = State::DRAW;
+			break;
+		case  State::DRAW:
+			qDebug() << "State::Draw";
+			harrisdetector.drawOnImage( frame, points);
+			imshow("Harris", frame);
+			state = State::STOP;
+			break;
+		case  State::STOP:
+			qDebug() << "State::STOP";
+			break;
+	}
+
+	
+
+}
+
+std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
+{
+	qDebug() << "State::GETIMAGE";
+
 	static RoboCompDifferentialRobot::TBaseState bState;
     static RoboCompJointMotor::MotorStateMap hState;
-    static RoboCompRGBD::imgType rgbMatrix;
-    static RoboCompRGBD::depthType distanceMatrix;
 	static RoboCompRGBD::ColorSeq colorSeq;
 	static RoboCompRGBD::DepthSeq depthSeq;
-	static RoboCompRGBD::PointSeq pointsSeq;
+	static RoboCompRGBD::PointSeq pointSeq;
 	
 	try
 	{
-		//rgbd_proxy->getData(rgbMatrix,distanceMatrix, hState, bState);
-		rgbd_proxy->getImage(colorSeq, depthSeq, pointsSeq, hState, bState);
-        	
-        Mat frame(480, 640, CV_8UC3,  &(colorSeq)[0]);
+		rgbd_proxy->getImage(colorSeq, depthSeq, pointSeq, hState, bState);
 		Mat depth(480, 640, CV_32FC1,  &(depthSeq)[0]), depth_norm, depth_norm_scaled;
+		Mat frame(480, 640, CV_8UC3,  &(colorSeq)[0]), greyMat;
 		normalize( depth, depth_norm, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
 		convertScaleAbs( depth_norm, depth_norm_scaled );
-		
-		cv::Mat greyMat;
 		cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
 		cv::cvtColor(frame, greyMat, cv::COLOR_RGB2GRAY);
-		
-		//Harris on Depth
-		harrisdetector.detect(depth);
-		std::vector<cv::Point> points;
-		harrisdetector.getCorners( points, .01);
-		qDebug() << "corners depth" << points.size();
-	
-		//Harris on Gray Image
-		harrisdetector.detect(greyMat);
-		harrisdetector.getCorners( points, .01);
-		qDebug() << "corners gray " << points.size();
-	
-		//Filter those at the table top level
-		std::vector<cv::Point> pointsCopy;
-		for( auto p : points)
-		{
-			int index = p.y *640 + p.x;
-			QVec coor = QVec::vec3( pointsSeq[index].x, pointsSeq[index].y, pointsSeq[index].z);
-			QVec floorCoor = innerModel->transform("floor", coor, "rgbd");
-			qDebug() << coor;
-			qDebug() << floorCoor;
-			qDebug();
-			if(  floorCoor.y() > 650 and floorCoor.y() < 800)
-				pointsCopy.push_back(p);
-		}
-		
-		harrisdetector.drawOnImage( frame, pointsCopy);
-			
-		
-		imshow("Harris", frame);
-		imshow("Depth", depth_norm_scaled);
-		//	imshow("Canny", dst);
-		//    imshow("Hough", cdst);
-		
-	
-		//         QImage img = QImage(&rgbMatrix[0], 640, 480, QImage::Format_RGB888);
-		//         label->setPixmap(QPixmap::fromImage(img));
-		//         label->resize(label->pixmap()->size());
-		// 		memcpy(image_gray.data, &img[0], m_width*m_height*sizeof(uchar));
+		return std::make_tuple(frame, greyMat, depth_norm_scaled, pointSeq);
 		
 	}
 	catch(const Ice::Exception &e)
 	{	std::cout << "Error reading from Camera" << e << std::endl;	}
+	
+	return make_tuple( Mat(), Mat(), Mat(), PointSeq());
+}
+
+void  SpecificWorker::computeHarrisCorners( const Mat &img, std::vector<cv::Point> &points)
+{
+	qDebug() << "State::HARRIS";
+	harrisdetector.detect(img);
+	harrisdetector.getCorners( points, .01);
+	qDebug() << __FUNCTION__ << "corners" << points.size();
+}
+
+std::vector<cv::Point> SpecificWorker::filterTable(const PointSeq &pointsSeq, const std::vector<cv::Point> &points)
+{
+	std::vector<cv::Point> pointsCopy;
+	for( auto p : points)
+	{
+		int index = p.y *640 + p.x;
+		QVec floorCoor = innerModel->transform("floor", QVec::vec3( pointsSeq[index].x, pointsSeq[index].y, pointsSeq[index].z), "rgbd");
+		if(  floorCoor.y() > 700 and floorCoor.y() < 780)
+				pointsCopy.push_back(p);
+	}
+	qDebug() << __FUNCTION__ << "corners" << pointsCopy.size();
+	return pointsCopy;
+	
 }
 
 
+/*
 Mat SpecificWorker::canny(const Mat &img)
 {
 	
@@ -177,7 +203,15 @@ Mat SpecificWorker::hough(const Mat &img)
 		}
 	return cdst;
 }
+*/
 
 
-
-
+//imshow("Depth", depth_norm_scaled);
+		//	imshow("Canny", dst);
+		//    imshow("Hough", cdst);
+		
+	
+		//         QImage img = QImage(&rgbMatrix[0], 640, 480, QImage::Format_RGB888);
+		//         label->setPixmap(QPixmap::fromImage(img));
+		//         label->resize(label->pixmap()->size());
+		// 		memcpy(image_gray.data, &img[0], m_width*m_height*sizeof(uchar));

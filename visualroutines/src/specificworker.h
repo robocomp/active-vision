@@ -33,7 +33,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "harrisdetector.h"
-
+#include "tabletype.h"
 
 
 using namespace cv;
@@ -64,9 +64,10 @@ private:
 	
 	//QStateMachine machine;
 	
-	enum class State {INIT, GETIMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW};
+	enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
 	State state = State::INIT;
 	
+	TableType table;
 };
 
 #endif

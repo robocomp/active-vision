@@ -36,7 +36,6 @@ SpecificWorker::~SpecificWorker()
 
 bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 {
-
 	try
 	{
 // 		for(auto p : params)
@@ -78,11 +77,10 @@ void SpecificWorker::compute()
 	{
 		case State::INIT:
 			qDebug() << "State::INIT";
-			state = State::GETIMAGE;
+			state = State::GET_IMAGE;
 			break;
-		case State::GETIMAGE:
+		case State::GET_IMAGE:
 			tie(frame, gray, depth, pointSeq) = getImage();
-			//imshow("Color", frame);
 			state = State::HARRIS;
 			break;
 		case  State::HARRIS:
@@ -92,21 +90,27 @@ void SpecificWorker::compute()
 			break;
 		case State::FILTER_TABLE_HEIGHT:
 			points = filterTable( pointSeq , points);
-			state = State::DRAW;
+			//state = State::DRAW_HARRIS;
+			state = State::RENDER_TABLE;
 			break;
-		case  State::DRAW:
+			
+		case  State::DRAW_HARRIS:
 			qDebug() << "State::Draw";
 			harrisdetector.drawOnImage( frame, points);
 			imshow("Harris", frame);
+			state = State::RENDER_TABLE;
+			break;
+			
+		case State::RENDER_TABLE:	
+			qDebug() << "State::RENDER_TABLE";
+			table.render( frame, innerModel );
+			imshow("Cog-Table", frame);
 			state = State::STOP;
 			break;
 		case  State::STOP:
 			qDebug() << "State::STOP";
 			break;
 	}
-
-	
-
 }
 
 std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
@@ -161,57 +165,3 @@ std::vector<cv::Point> SpecificWorker::filterTable(const PointSeq &pointsSeq, co
 }
 
 
-/*
-Mat SpecificWorker::canny(const Mat &img)
-{
-	
-		 /// Canny detector
-		Mat dst, detected_edges;
-		int lowThreshold = 50;
-		int highThreshold = 150;
-		int kernel_size = 3;
-		Canny( img, detected_edges, lowThreshold, highThreshold, kernel_size );
-
-		/// Using Canny's output as a mask, we display our result
-		dst = Scalar::all(0);
-		img.copyTo( dst, detected_edges);
-		return detected_edges;
-	
-}
-
-Mat SpecificWorker::hough(const Mat &img)
-{
-	vector<Vec2f> lines;
-	Mat cdst;
-	
-	Mat detected_edges = canny(img);
-	HoughLines(detected_edges, lines, 1, CV_PI/180, 70, 0, 0 );
-	cvtColor(img, cdst, CV_GRAY2BGR); 
-	
-		// draw lines
-		for( auto l : lines )
-		{
-			float rho = l[0], theta = l[1];
-			Point pt1, pt2;
-			double a = cos(theta), b = sin(theta);
-			double x0 = a*rho, y0 = b*rho;
-			pt1.x = cvRound(x0 + 1000*(-b));
-			pt1.y = cvRound(y0 + 1000*(a));
-			pt2.x = cvRound(x0 - 1000*(-b));
-			pt2.y = cvRound(y0 - 1000*(a));
-			line( cdst, pt1, pt2, Scalar(0,0,255), 3, CV_AA);
-		}
-	return cdst;
-}
-*/
-
-
-//imshow("Depth", depth_norm_scaled);
-		//	imshow("Canny", dst);
-		//    imshow("Hough", cdst);
-		
-	
-		//         QImage img = QImage(&rgbMatrix[0], 640, 480, QImage::Format_RGB888);
-		//         label->setPixmap(QPixmap::fromImage(img));
-		//         label->resize(label->pixmap()->size());
-		// 		memcpy(image_gray.data, &img[0], m_width*m_height*sizeof(uchar));

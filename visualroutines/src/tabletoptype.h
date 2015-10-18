@@ -15,8 +15,8 @@
  * 
  */
 
-#ifndef LEGTYPE_H
-#define LEGTYPE_H
+#ifndef TABLETOPTYPE_H
+#define TABLETOPTYPE_H
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -27,23 +27,25 @@
 #include <OpenMesh/Core/IO/MeshIO.hh>
 #include <OpenMesh/Core/Mesh/PolyMesh_ArrayKernelT.hh>
 
-class LegType
+class TabletopType
 {
 	public:
-		LegType(const QString &_name, const QVec &offset, float _length=750, float _width=70);
-		LegType(const LegType& other);
-		~LegType();
+		TabletopType(const QString &_name, const QVec &offset, float _length=900, float _width=1400, float _thick=80);
+		TabletopType(const TabletopType& other);
+		~TabletopType();
 		typedef OpenMesh::PolyMesh_ArrayKernelT<>  MyMesh;
-		
+		void render(cv::Mat& frame, InnerModel* innerModel, const QString &parent, std::vector< std::vector < cv::Point> > &lines);
+	
+	private:
 		QString name;
 		QVec offset;
-		float width, length;
+		float width, length, thick;
 		void makeItLonger(float k);
 		void makeItWider(float w);
-		void render(cv::Mat& frame, InnerModel* innerModel, const QString &parent, std::vector< std::vector < cv::Point> > &lines);
+		void makeItThicker(float t);
 		
 		MyMesh mesh;
 		MyMesh::VertexHandle vhandle[8];
 };
 
-#endif // LEGTYPE_H
+#endif // TABLETOPTYPE_H

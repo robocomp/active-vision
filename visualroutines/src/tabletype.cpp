@@ -19,8 +19,12 @@
 
 TableType::TableType(): height(700), length(900), width(1400), topThickness(80), legWidth(90)
 {
+	tabletop = new TabletopType("top", QVec::vec3(0,0,0));
+	
 	legs.push_back( new LegType("leg0", QVec::vec3(-width/2+legWidth/2, 0, -length/2+legWidth/2 )));
 	legs.push_back( new LegType("leg1", QVec::vec3(+width/2-legWidth/2, 0, -length/2+legWidth/2 )));
+	legs.push_back( new LegType("leg2", QVec::vec3(-width/2+legWidth/2, 0, length/2-legWidth/2 )));
+	legs.push_back( new LegType("leg3", QVec::vec3(+width/2-legWidth/2, 0, length/2-legWidth/2 )));
 }
 
 TableType::TableType(const TableType& other)
@@ -33,40 +37,13 @@ TableType::~TableType()
 
 cv::Mat TableType::render(cv::Mat& frame, InnerModel *innerModel)
 {
-
-	//Este es el ejemplo básico. Necesitaríamos 
-	    // la matriz de cámara. La sacamos el InnerModel (DONE)
-		// los puntos de la cog-mesa 3D. Hay que muestrear el objeto. Podemos empezar por el tablero
-	    // Proyectarlos y guardarlos en el array (puede ser un array de arrays de puntos (líneas)
-	
 	//Creamos unos transforms virtuales en el mundo qe representaran nuestra cog-mesa, De momento cogemos t_table del .xml como origen
 	innerModel->newTransform("vtable", "static", innerModel->getNode("t_table"), 0, 0, 0, 0, 0, 0);
 	innerModel->newTransform("vtable_top", "static", innerModel->getNode("vtable"), 0, this->height, 0, 0, 0, 0);
 	innerModel->newTransform("vtable_down", "static", innerModel->getNode("vtable_top"), 0, -this->topThickness, 0, 0, 0, 0);
-	
-	//recorremos el tablero muesteando puntos cada 25mm (step)
+
 	std::vector< std::vector < cv::Point> > lines;
-	int step = 50;
-	for( int x = -this->width/2 ;x < this->width/2; x += step)
-	{
-		std::vector< cv::Point > line;
-		for( int z = -this->length/2 ; z < this->length/2; z += step)
-		{
-			QVec qi = innerModel->project("rgbd", innerModel->transform("rgbd", QVec::vec3(x,0,z), "vtable_top") , "rgbd");
-			line.push_back( cv::Point(qi.x(), qi.y()));
-		}
-		lines.push_back(line);
-	}
-	for( int z = -this->length/2 ; z < this->length/2; z += step)		
-	{
-		std::vector< cv::Point > line;
-		for( int x = -this->width/2 ;x < this->width/2; x += step)
-		{
-			QVec qi = innerModel->project("rgbd", innerModel->transform("rgbd", QVec::vec3(x,0,z), "vtable_top") , "rgbd");
-			line.push_back( cv::Point(qi.x(), qi.y()));
-		}
-		lines.push_back(line);
-	}
+	tabletop->render(frame, innerModel, "vtable_top", lines);
 	
 	for( auto l : legs)
 		l->render(frame, innerModel, "vtable_down", lines);
@@ -79,3 +56,29 @@ cv::Mat TableType::render(cv::Mat& frame, InnerModel *innerModel)
 	
 	return frame;
 }
+
+
+
+	//recorremos el tablero muesteando puntos cada 25mm (step)
+// 	std::vector< std::vector < cv::Point> > lines;
+// 	int step = 50;
+// 	for( int x = -this->width/2 ;x < this->width/2; x += step)
+// 	{
+// 		std::vector< cv::Point > line;
+// 		for( int z = -this->length/2 ; z < this->length/2; z += step)
+// 		{
+// 			QVec qi = innerModel->project("rgbd", innerModel->transform("rgbd", QVec::vec3(x,0,z), "vtable_top") , "rgbd");
+// 			line.push_back( cv::Point(qi.x(), qi.y()));
+// 		}
+// 		lines.push_back(line);
+// 	}
+// 	for( int z = -this->length/2 ; z < this->length/2; z += step)		
+// 	{
+// 		std::vector< cv::Point > line;
+// 		for( int x = -this->width/2 ;x < this->width/2; x += step)
+// 		{
+// 			QVec qi = innerModel->project("rgbd", innerModel->transform("rgbd", QVec::vec3(x,0,z), "vtable_top") , "rgbd");
+// 			line.push_back( cv::Point(qi.x(), qi.y()));
+// 		}
+// 		lines.push_back(line);
+// 	}

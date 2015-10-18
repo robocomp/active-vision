@@ -7,6 +7,7 @@ SET ( SOURCES
 	harrisdetector.cpp
 	tabletype.cpp
 	legtype.cpp
+	tabletoptype.cpp
 )
 
 # Headers set
@@ -15,8 +16,11 @@ SET ( HEADERS
   specificmonitor.h
 #  $ENV{ROBOCOMP}/classes/agmInner/agmInner.h
 )
+
 INCLUDE($ENV{ROBOCOMP}/cmake/modules/opencv2.cmake)
 INCLUDE($ENV{ROBOCOMP}/cmake/modules/ipp.cmake)
+
+SET ( SPECIFIC_LIBS OpenMeshCore )
 
 ADD_DEFINITIONS( -std=c++11 )
 

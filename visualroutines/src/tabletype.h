@@ -22,6 +22,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <innermodel/innermodel.h>
 #include "legtype.h"
+#include "tabletoptype.h"
 
 class TableType
 {
@@ -36,6 +37,8 @@ class TableType
 	private:
 		
 		QList< LegType*> legs;
+		TabletopType *tabletop;
+		
 };
 
 #endif // TABLETYPE_H

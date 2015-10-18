@@ -15,11 +15,10 @@
  * 
  */
 
-#include "legtype.h"
+#include "tabletoptype.h"
 
-LegType::LegType( const QString &_name, const QVec &_offset, float _length, float _width) : name(_name), offset(_offset),  width(_width), length(_length)
+TabletopType::TabletopType( const QString &_name, const QVec &_offset, float _length, float _width, float _thick) : name(_name), offset(_offset),  width(_width), length(_length), thick(_thick)
 {
-	
 	//Create the vertices of a unitary cube
 	vhandle[0] = mesh.add_vertex(MyMesh::Point(-1, -1, 1));  
   vhandle[1] = mesh.add_vertex(MyMesh::Point( 1, -1, 1));
@@ -76,35 +75,43 @@ LegType::LegType( const QString &_name, const QVec &_offset, float _length, floa
   mesh.add_face(face_vhandles);
 
 	//Adjust to object's real dimensions
-	makeItLonger(length);
 	makeItWider(width);
+	makeItLonger(length);
+	makeItThicker(thick);
 }
 
-LegType::LegType(const LegType& other)
+TabletopType::TabletopType(const TabletopType& other)
 {
 }
 
-LegType::~LegType()
+TabletopType::~TabletopType()
 {
 }
 
-void LegType::makeItLonger(float k)
+void TabletopType::makeItThicker(float t)
 {
 	//to make it longer downwards multiply vertices with y=-1  (down side) by y = y * k
-	mesh.set_point( vhandle[0], mesh.point(vhandle[0])*MyMesh::Point(1,k,1));
-	mesh.set_point( vhandle[1], mesh.point(vhandle[1])*MyMesh::Point(1,k,1));
-	mesh.set_point( vhandle[4], mesh.point(vhandle[4])*MyMesh::Point(1,k,1));
-	mesh.set_point( vhandle[5], mesh.point(vhandle[5])*MyMesh::Point(1,k,1));
+	mesh.set_point( vhandle[0], mesh.point(vhandle[0])*MyMesh::Point(1,t,1));
+	mesh.set_point( vhandle[1], mesh.point(vhandle[1])*MyMesh::Point(1,t,1));
+	mesh.set_point( vhandle[4], mesh.point(vhandle[4])*MyMesh::Point(1,t,1));
+	mesh.set_point( vhandle[5], mesh.point(vhandle[5])*MyMesh::Point(1,t,1));
 }
 
-void LegType::makeItWider(float w)
+void TabletopType::makeItWider(float w)
 {
 	//to make it wider multiply all vertices at its x and z coordinate by half the final size
 	for(auto vh : vhandle)
-		mesh.set_point( vh, mesh.point(vh)*MyMesh::Point(w/2,1,w/2));
+		mesh.set_point( vh, mesh.point(vh)*MyMesh::Point(w/2,1,1));
 }
 
-void LegType::render(cv::Mat& frame, InnerModel* innerModel, const QString& parent, std::vector< std::vector< cv::Point > >& lines)
+void TabletopType::makeItLonger(float w)
+{
+	//to make it wider multiply all vertices at its x and z coordinate by half the final size
+	for(auto vh : vhandle)
+		mesh.set_point( vh, mesh.point(vh)*MyMesh::Point(1,1,w/2));
+}
+
+void TabletopType::render(cv::Mat& frame, InnerModel* innerModel, const QString& parent, std::vector< std::vector< cv::Point > >& lines)
 {
 	//create the virtual transform. Probably should go in constructor
 	innerModel->newTransform(name, "static", innerModel->getNode(parent), offset.x(), offset.y(), offset.z(), 0, 0, 0);
@@ -122,19 +129,3 @@ void LegType::render(cv::Mat& frame, InnerModel* innerModel, const QString& pare
 			lines.push_back(line);
 	}
 }
-
-
-
-//Vertical lines
-// 	for( int x = -width/2 ; x < width/2; x += step)
-// 	{
-// 		std::vector< cv::Point > line;
-// 		for( int y = 0 ;y > -length; y -= step)
-// 		{
-// 			QVec qi = innerModel->project(name, QVec::vec3(x,y,0), "rgbd");
-// 			line.push_back( cv::Point(qi.x(), qi.y()));
-// 			QVec qii = innerModel->project(name, QVec::vec3(width/2,x,y) , "rgbd");
-// 			line.push_back( cv::Point(qi.x(), qi.y()));
-// 		}
-// 		lines.push_back(line);
-// 	}

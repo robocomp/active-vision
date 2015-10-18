@@ -30,18 +30,45 @@
 class LegType
 {
 	public:
-		LegType(const QString &_name, const QVec &offset, float _length=750, float _width=70);
+		LegType(const QString &_name, const QString &parent, InnerModel *_innerModel, const QVec &offset, float _length=750, float _width=70);
 		LegType(const LegType& other);
 		~LegType();
 		typedef OpenMesh::PolyMesh_ArrayKernelT<>  MyMesh;
 		
+		/**
+		 * @brief Renders the object on the camera using InneModel
+		 * 
+		 * @param lines array of arrays of points
+		 * @return void
+		 */
+		void render(std::vector< std::vector < cv::Point> > &lines);
+		
+	private:
+			
 		QString name;
+		InnerModel *innerModel;
+		
+		//Geometric parameters
 		QVec offset;
 		float width, length;
-		void makeItLonger(float k);
-		void makeItWider(float w);
-		void render(cv::Mat& frame, InnerModel* innerModel, const QString &parent, std::vector< std::vector < cv::Point> > &lines);
 		
+			/**
+		 * @brief Makes the tabletop bigger in the Z dimension
+		 * 
+		 * @param k final lenght in mm
+		 * @return void
+		 */
+		void makeItLonger(float k);
+		
+			/**
+		 * @brief Makes the tabletop bigger in the Z dimension
+		 * 
+		 * @param w final width in mm
+		 * @return void
+		 */
+		void makeItWider(float w);
+		
+	  //OpenMesh structures	
 		MyMesh mesh;
 		MyMesh::VertexHandle vhandle[8];
 };

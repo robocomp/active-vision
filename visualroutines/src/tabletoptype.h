@@ -30,20 +30,53 @@
 class TabletopType
 {
 	public:
-		TabletopType(const QString &_name, const QVec &offset, float _length=900, float _width=1400, float _thick=80);
+		TabletopType(const QString &_name, const QString &_parent, InnerModel *_innerModel, const QVec &offset, float _length=900, float _width=1400, float _thick=80);
 		TabletopType(const TabletopType& other);
 		~TabletopType();
+		
+		// type of mesh structure form OPenMesh
 		typedef OpenMesh::PolyMesh_ArrayKernelT<>  MyMesh;
-		void render(cv::Mat& frame, InnerModel* innerModel, const QString &parent, std::vector< std::vector < cv::Point> > &lines);
+		
+		/**
+		 * @brief Renders the object on the camera using InneModel
+		 * 
+		 * @param lines array of arrays of points
+		 * @return void
+		 */
+		void render(std::vector< std::vector< cv::Point > >& lines);
 	
 	private:
 		QString name;
+		InnerModel *innerModel;
+		
+		//Geomtric parameters
 		QVec offset;
 		float width, length, thick;
-		void makeItLonger(float k);
-		void makeItWider(float w);
-		void makeItThicker(float t);
 		
+		/**
+		 * @brief Makes the tabletop bigger in the Z dimension
+		 * 
+		 * @param k final lenght in mm
+		 * @return void
+		 */
+		void makeItLonger(float k);
+		/**
+		 * @brief Makes the tabletop bigger in the X dimension
+		 * 
+		 * @param w final width in mm
+		 * @return void
+		 */
+		void makeItWider(float w);
+		
+		/**
+		 * @brief  Makes the tabletop bigger in the Y dimension
+		 * 
+		 * @param t final thikness in mm
+		 * @return void
+		 */
+		void makeItThicker(float t);
+	
+		//mesh variables form OPenMesh
 		MyMesh mesh;
 		MyMesh::VertexHandle vhandle[8];
 };

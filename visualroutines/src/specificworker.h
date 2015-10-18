@@ -67,7 +67,7 @@ private:
 	enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
 	State state = State::INIT;
 	
-	TableType table;
+	TableType *table;
 };
 
 #endif

@@ -17,8 +17,11 @@
 
 #include "legtype.h"
 
-LegType::LegType( const QString &_name, const QVec &_offset, float _length, float _width) : name(_name), offset(_offset),  width(_width), length(_length)
+LegType::LegType( const QString &_name, const QString &parent, InnerModel *_innerModel,const QVec &_offset, float _length, float _width) : 
+									name(_name), innerModel(_innerModel), offset(_offset),  width(_width), length(_length)
 {
+	//create the virtual transform. Probably should go in constructor
+	innerModel->newTransform(name, "static", innerModel->getNode(parent), offset.x(), offset.y(), offset.z(), 0, 0, 0);
 	
 	//Create the vertices of a unitary cube
 	vhandle[0] = mesh.add_vertex(MyMesh::Point(-1, -1, 1));  
@@ -90,7 +93,7 @@ LegType::~LegType()
 
 void LegType::makeItLonger(float k)
 {
-	//to make it longer downwards multiply vertices with y=-1  (down side) by y = y * k
+	//to make it longer downwards multiply vertices with y=-1  (down side) by y = y *frame k
 	mesh.set_point( vhandle[0], mesh.point(vhandle[0])*MyMesh::Point(1,k,1));
 	mesh.set_point( vhandle[1], mesh.point(vhandle[1])*MyMesh::Point(1,k,1));
 	mesh.set_point( vhandle[4], mesh.point(vhandle[4])*MyMesh::Point(1,k,1));
@@ -104,11 +107,8 @@ void LegType::makeItWider(float w)
 		mesh.set_point( vh, mesh.point(vh)*MyMesh::Point(w/2,1,w/2));
 }
 
-void LegType::render(cv::Mat& frame, InnerModel* innerModel, const QString& parent, std::vector< std::vector< cv::Point > >& lines)
+void LegType::render(std::vector< std::vector< cv::Point > >& lines)
 {
-	//create the virtual transform. Probably should go in constructor
-	innerModel->newTransform(name, "static", innerModel->getNode(parent), offset.x(), offset.y(), offset.z(), 0, 0, 0);
-	
 	//Recorre las caras y para cada cara recorre los vértices, los proyecta y los copia a lines
   for( MyMesh::FaceIter f_it=mesh.faces_begin(); f_it!=mesh.faces_end(); ++f_it) 
   {

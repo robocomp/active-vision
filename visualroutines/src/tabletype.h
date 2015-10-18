@@ -27,16 +27,28 @@
 class TableType
 {
 	public:
-		TableType();
+		TableType(QString _name, InnerModel *_innerModel);
 		TableType(const TableType& other);
 		~TableType();
-		cv::Mat render(cv::Mat& frame, InnerModel* innerModel);
 		
+		/**
+		 * @brief Renders the object on the camera plane using InnerModel
+		 * 
+		 * @param frame OPenCV image frame where to draw the rendered lines
+		 */
+		void render(cv::Mat& frame);
+		
+	private:
+		// geometric parameters of the object
 		float height, length, width, topThickness, legWidth;
 	
-	private:
+		InnerModel *innerModel;
+		QString name;
 		
+		//List of legs objects
 		QList< LegType*> legs;
+		
+		//tabletop object
 		TabletopType *tabletop;
 		
 };

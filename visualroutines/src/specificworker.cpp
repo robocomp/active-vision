@@ -60,6 +60,11 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	{
 		qFatal("Error reading config params");
 	}
+	
+	//Objects
+	table = new TableType("vtable", innerModel);
+	
+	
 	//timer.setSingleShot(true);
 	timer.start(Period);
 
@@ -79,15 +84,18 @@ void SpecificWorker::compute()
 			qDebug() << "State::INIT";
 			state = State::GET_IMAGE;
 			break;
+			
 		case State::GET_IMAGE:
 			tie(frame, gray, depth, pointSeq) = getImage();
 			state = State::HARRIS;
 			break;
+			
 		case  State::HARRIS:
 			computeHarrisCorners( gray, points );
 			computeHarrisCorners( depth, points );
 			state = State::FILTER_TABLE_HEIGHT;
 			break;
+			
 		case State::FILTER_TABLE_HEIGHT:
 			points = filterTable( pointSeq , points);
 			//state = State::DRAW_HARRIS;
@@ -103,7 +111,7 @@ void SpecificWorker::compute()
 			
 		case State::RENDER_TABLE:	
 			qDebug() << "State::RENDER_TABLE";
-			table.render( frame, innerModel );
+			table->render( frame);
 			imshow("Cog-Table", frame);
 			state = State::STOP;
 			break;

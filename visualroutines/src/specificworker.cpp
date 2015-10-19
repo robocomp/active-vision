@@ -126,7 +126,7 @@ std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 	qDebug() << "State::GETIMAGE";
 
 	static RoboCompDifferentialRobot::TBaseState bState;
-    static RoboCompJointMotor::MotorStateMap hState;
+  static RoboCompJointMotor::MotorStateMap hState;
 	static RoboCompRGBD::ColorSeq colorSeq;
 	static RoboCompRGBD::DepthSeq depthSeq;
 	static RoboCompRGBD::PointSeq pointSeq;

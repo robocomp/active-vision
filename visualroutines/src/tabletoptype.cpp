@@ -121,7 +121,7 @@ void TabletopType::render(std::vector< std::vector< cv::Point > >& lines)
   for( MyMesh::FaceIter f_it=mesh.faces_begin(); f_it!=mesh.faces_end(); ++f_it) 
   {
 			std::vector< cv::Point > line;
-			for(MyMesh::FaceVertexIter fv_it = mesh.fv_iter(*f_it); fv_it ; ++fv_it) 
+			for( MyMesh::FaceVertexIter fv_it = mesh.fv_iter(*f_it); fv_it.is_valid() ; ++fv_it) 
 			{
 				MyMesh::Point &pp = mesh.point(*fv_it);
 				QVec qi = innerModel->project(name, QVec::vec3( pp[0],pp[1],pp[2]), "rgbd");

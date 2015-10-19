@@ -12,5 +12,6 @@ untar the file somewhere outside RoboComp directory tree and follow the installa
     cmake -DCMAKE_BUILD_TYPE=Release ..
     make
     sudo make install
+    sudo ldconfig
 
     

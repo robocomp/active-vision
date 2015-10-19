@@ -5,4 +5,12 @@ This component requires de installation of the OpenMesh library. Please, downloa
 
     http://www.openmesh.org/download
     
-and follow the installation instructions.
+untar the file somewhere outside RoboComp directory tree and follow the installation instructions:
+
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    make
+    sudo make install
+
+    

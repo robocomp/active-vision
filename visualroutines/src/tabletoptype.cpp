@@ -26,12 +26,12 @@ TabletopType::TabletopType( const QString &_name, const QString &parent, InnerMo
 	//Create the vertices of a unitary cube
 	vhandle[0] = mesh.add_vertex(MyMesh::Point(-1, -1, 1));  
   vhandle[1] = mesh.add_vertex(MyMesh::Point( 1, -1, 1));
-  vhandle[2] = mesh.add_vertex(MyMesh::Point( 1,  1, 1));
-  vhandle[3] = mesh.add_vertex(MyMesh::Point(-1,  1, 1));
+  vhandle[2] = mesh.add_vertex(MyMesh::Point( 1,  1, 1));   // corner 1
+  vhandle[3] = mesh.add_vertex(MyMesh::Point(-1,  1, 1));   // corner 4
   vhandle[4] = mesh.add_vertex(MyMesh::Point(-1, -1, -1));
   vhandle[5] = mesh.add_vertex(MyMesh::Point( 1, -1, -1));
-  vhandle[6] = mesh.add_vertex(MyMesh::Point( 1,  1, -1));
-  vhandle[7] = mesh.add_vertex(MyMesh::Point(-1,  1, -1));
+  vhandle[6] = mesh.add_vertex(MyMesh::Point( 1,  1, -1));  // corner 2
+  vhandle[7] = mesh.add_vertex(MyMesh::Point(-1,  1, -1));  // corner 3
 	
 	std::vector<MyMesh::VertexHandle>  face_vhandles;
 
@@ -90,6 +90,19 @@ TabletopType::TabletopType(const TabletopType& other)
 
 TabletopType::~TabletopType()
 {
+}
+
+std::vector<QVec> TabletopType::getCorners()
+{
+	std::vector<int> indexes = {2,6,7,3};  //indexes of top layer corners
+	std::vector<QVec> cc;
+	
+	for( auto i: indexes)
+	{
+		MyMesh::Point &pp = mesh.point(vhandle[i]);
+		cc.push_back(QVec::vec3(pp[0],pp[1],pp[2]));
+	}
+	return cc;
 }
 
 void TabletopType::makeItThicker(float t)

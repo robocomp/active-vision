@@ -37,6 +37,8 @@
 
 
 using namespace cv;
+typedef std::vector<cv::Point> Points;
+
 
 class SpecificWorker : public GenericWorker
 {
@@ -46,25 +48,29 @@ public:
 	~SpecificWorker();
 	bool setParams(RoboCompCommonBehavior::ParameterList params);
 
+	// PRIMITIVES
+	tuple< Mat, Mat, Mat, PointSeq > getImage();
+	void  computeHarrisCorners(const Mat& img, Points &points);
+	vector< Point > filterTable(const PointSeq &pointSeq, const Points &points);
+	HarrisDetector harrisdetector;
+	Points cluster(const Points &points, cv::Mat& frame);
 
 public slots:
 	void compute(); 	
+	void checkTableButton();
 	
 
 private:
 	InnerModel *innerModel;
-	HarrisDetector harrisdetector;
 	
 // 	Mat canny(const Mat &img);
 // 	Mat hough(const Mat &img);
 	void initMachine();
-	tuple< Mat, Mat, Mat, PointSeq > getImage();
-	void  computeHarrisCorners(const Mat& img, vector< cv::Point> &points);
-	vector< Point > filterTable(const PointSeq &pointSeq, const vector< Point >& points);
-	
+
 	//QStateMachine machine;
 	
-	enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
+	//enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
+	enum class State {INIT, TRY_TABLE};
 	State state = State::INIT;
 	
 	TableType *table;

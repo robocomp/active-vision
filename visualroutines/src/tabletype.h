@@ -20,16 +20,27 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include "opencv2/imgproc/imgproc.hpp"
 #include <innermodel/innermodel.h>
+#include <RGBD.h>
 #include "legtype.h"
 #include "tabletoptype.h"
+
+using namespace cv;
+
+class SpecificWorker;
+typedef std::vector<QVec> QPoints;
 
 class TableType
 {
 	public:
 		TableType(QString _name, InnerModel *_innerModel);
 		TableType(const TableType& other);
+		void update(SpecificWorker *handler);
 		~TableType();
+		enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, CLUSTER, DRAW_HARRIS, RENDER_TABLE, SELECT_FIRST_CORNER};
+		State state = State::INIT;
+	
 		
 		/**
 		 * @brief Renders the object on the camera plane using InnerModel
@@ -41,7 +52,7 @@ class TableType
 	private:
 		// geometric parameters of the object
 		float height, length, width, topThickness, legWidth;
-	
+		
 		InnerModel *innerModel;
 		QString name;
 		
@@ -50,6 +61,13 @@ class TableType
 		
 		//tabletop object
 		TabletopType *tabletop;
+		
+		std::tuple<int, int> selectFirstCorner(const QPoints& cluster3D);
+		
+// 		QVec getCornerImage(uint cornerNumber);
+// 		cv::Point getCornerImage(uint cornerNumber);
+// 		QVec getCornerWorld(uint cornerNumber);
+// 		void moveCorner(uint corner, const QVec point);
 		
 };
 

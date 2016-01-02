@@ -33,6 +33,7 @@ class TabletopType
 		TabletopType(const QString &_name, const QString &_parent, InnerModel *_innerModel, const QVec &offset, float _length=900, float _width=1400, float _thick=80);
 		TabletopType(const TabletopType& other);
 		~TabletopType();
+		std::vector<QVec> getCorners();
 		
 		// type of mesh structure form OPenMesh
 		typedef OpenMesh::PolyMesh_ArrayKernelT<>  MyMesh;
@@ -52,6 +53,9 @@ class TabletopType
 		//Geomtric parameters
 		QVec offset;
 		float width, length, thick;
+		
+		//Parts
+		
 		
 		/**
 		 * @brief Makes the tabletop bigger in the Z dimension

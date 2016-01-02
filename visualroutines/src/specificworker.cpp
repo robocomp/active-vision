@@ -24,6 +24,7 @@
 SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 {
 	//initMachine();
+	connect(tableButton, SIGNAL(clicked()), this, SLOT(checkTableButton()));
 }
 
 /**
@@ -64,7 +65,6 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	//Objects
 	table = new TableType("vtable", innerModel);
 	
-	
 	//timer.setSingleShot(true);
 	timer.start(Period);
 
@@ -74,52 +74,28 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 
 void SpecificWorker::compute()
 {
-	static Mat gray, depth, frame;
-	static std::vector<cv::Point> points;
-	static PointSeq pointSeq;
-	
+// 	static Mat gray, depth, frame;
+// 	static std::vector<cv::Point> points;
+// 	static PointSeq pointSeq;
+// 	
 	switch( state )
-	{
+ 	{
 		case State::INIT:
-			qDebug() << "State::INIT";
-			state = State::GET_IMAGE;
+			//qDebug() << "State::INIT";
 			break;
-			
-		case State::GET_IMAGE:
-			tie(frame, gray, depth, pointSeq) = getImage();
-			state = State::HARRIS;
+		case State::TRY_TABLE:
+			qDebug() << "State::TRY_TABLE";
+			if (table->state != TableType::State::STOP)
+				table->update(this);
+			else
+				state  = State::INIT;
 			break;
-			
-		case  State::HARRIS:
-			computeHarrisCorners( gray, points );
-			computeHarrisCorners( depth, points );
-			state = State::FILTER_TABLE_HEIGHT;
-			break;
-			
-		case State::FILTER_TABLE_HEIGHT:
-			points = filterTable( pointSeq , points);
-			//state = State::DRAW_HARRIS;
-			state = State::RENDER_TABLE;
-			break;
-			
-		case  State::DRAW_HARRIS:
-			qDebug() << "State::Draw";
-			harrisdetector.drawOnImage( frame, points);
-			imshow("Harris", frame);
-			state = State::RENDER_TABLE;
-			break;
-			
-		case State::RENDER_TABLE:	
-			qDebug() << "State::RENDER_TABLE";
-			table->render( frame);
-			imshow("Cog-Table", frame);
-			state = State::STOP;
-			break;
-		case  State::STOP:
-			qDebug() << "State::STOP";
-			break;
-	}
+	}	
 }
+
+////////////////////
+/// Primitives
+////////////////////
 
 std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 {
@@ -138,7 +114,7 @@ std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 		Mat frame(480, 640, CV_8UC3,  &(colorSeq)[0]), greyMat;
 		normalize( depth, depth_norm, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
 		convertScaleAbs( depth_norm, depth_norm_scaled );
-		cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+		//cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
 		cv::cvtColor(frame, greyMat, cv::COLOR_RGB2GRAY);
 		return std::make_tuple(frame, greyMat, depth_norm_scaled, pointSeq);
 		
@@ -172,4 +148,81 @@ std::vector<cv::Point> SpecificWorker::filterTable(const PointSeq &pointsSeq, co
 	
 }
 
+Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
+{
+	// group corners
+  Mat samples( points.size(), 2, CV_32F);
+  for( uint i = 0; i < points.size(); i++ )
+	{
+		samples.at<float>(i,0) = points[i].x;
+		samples.at<float>(i,1) = points[i].y;
+	}
+  int clusterCount = 4;
+  Mat labels;
+  int attempts = 5;
+  Mat centers;
+  cv::kmeans( samples, clusterCount, labels, cv::TermCriteria(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
+																														 10000, 0.0001), attempts, KMEANS_PP_CENTERS, centers );
+	Points plist;
+	for( int i = 0; i < centers.rows; i++ )
+	{
+		int cluster_idx = labels.at<int>(i,0);
+		cv::Point p(centers.at<float>(i, 0), centers.at<float>(i, 1));
+		cv::circle(frame, p, 4, cv::Scalar(0,255,0) ,3);
+		plist.push_back(p);
+  }
+	return plist;
+}
+/////////////////
+/// GUI
+////////////////
 
+void SpecificWorker::checkTableButton()
+{
+	state = State::TRY_TABLE;
+}
+
+
+///FUSCA
+
+// 	switch( state )
+// 	{
+// 		case State::INIT:
+// 			qDebug() << "State::INIT";
+// 			state = State::GET_IMAGE;
+// 			break;
+// 			
+// 		case State::GET_IMAGE:
+// 			tie(frame, gray, depth, pointSeq) = getImage();
+// 			state = State::HARRIS;
+// 			break;
+// 			
+// 		case  State::HARRIS:
+// 			computeHarrisCorners( gray, points );
+// 			computeHarrisCorners( depth, points );
+// 			state = State::FILTER_TABLE_HEIGHT;
+// 			break;
+// 			
+// 		case State::FILTER_TABLE_HEIGHT:
+// 			points = filterTable( pointSeq , points);
+// 			//state = State::DRAW_HARRIS;
+// 			state = State::RENDER_TABLE;
+// 			break;
+// 			
+// 		case  State::DRAW_HARRIS:
+// 			qDebug() << "State::Draw";
+// 			harrisdetector.drawOnImage( frame, points);
+// 			imshow("Harris", frame);
+// 			state = State::RENDER_TABLE;
+// 			break;
+// 			
+// 		case State::RENDER_TABLE:	
+// 			qDebug() << "State::RENDER_TABLE";
+// 			table->render( frame);
+// 			imshow("Cog-Table", frame);
+// 			state = State::STOP;
+// 			break;
+// 		case  State::STOP:
+// 			qDebug() << "State::STOP";
+// 			break;
+// 	}

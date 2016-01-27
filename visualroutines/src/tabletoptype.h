@@ -27,13 +27,15 @@
 #include <OpenMesh/Core/IO/MeshIO.hh>
 #include <OpenMesh/Core/Mesh/PolyMesh_ArrayKernelT.hh>
 
+
+
 class TabletopType
 {
 	public:
 		TabletopType(const QString &_name, const QString &_parent, InnerModel *_innerModel, const QVec &offset, float _length=900, float _width=1400, float _thick=80);
 		TabletopType(const TabletopType& other);
 		~TabletopType();
-		std::vector<QVec> getCorners();
+		std::vector<QVec> getCorners(const QString& parent);
 		
 		// type of mesh structure form OPenMesh
 		typedef OpenMesh::PolyMesh_ArrayKernelT<>  MyMesh;
@@ -45,18 +47,8 @@ class TabletopType
 		 * @return void
 		 */
 		void render(std::vector< std::vector< cv::Point > >& lines);
+		void moveCornerTo(uint corner, const QVec &pos, const QString &parent);
 	
-	private:
-		QString name;
-		InnerModel *innerModel;
-		
-		//Geomtric parameters
-		QVec offset;
-		float width, length, thick;
-		
-		//Parts
-		
-		
 		/**
 		 * @brief Makes the tabletop bigger in the Z dimension
 		 * 
@@ -79,6 +71,22 @@ class TabletopType
 		 * @return void
 		 */
 		void makeItThicker(float t);
+		
+		void makeItLong(uint corner, float w);
+		
+	private:
+		QString name;
+		InnerModel *innerModel;
+		
+		//Geomtric parameters
+		QVec offset;
+		float width, length, thick;
+		std::vector<int> indexes = {2,6,7,3};  //indexes of top layer corners
+		std::vector<int> indexesDown = {1,5,4,0};  //indexes of top layer corners
+		//Parts
+		
+		
+	
 	
 		//mesh variables form OPenMesh
 		MyMesh mesh;

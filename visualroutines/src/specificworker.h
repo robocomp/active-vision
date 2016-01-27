@@ -66,11 +66,13 @@ private:
 // 	Mat canny(const Mat &img);
 // 	Mat hough(const Mat &img);
 	void initMachine();
+	float distance(PointSeq, PointSeq);
+	QVec metropolis( float);
 
 	//QStateMachine machine;
 	
 	//enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
-	enum class State {INIT, TRY_TABLE};
+	enum class State {INIT, TRY_TABLE, FIT_TABLE, SENSE};
 	State state = State::INIT;
 	
 	TableType *table;

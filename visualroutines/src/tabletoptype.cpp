@@ -24,12 +24,12 @@ TabletopType::TabletopType( const QString &_name, const QString &parent, InnerMo
 	innerModel->newTransform(name, "static", innerModel->getNode(parent), offset.x(), offset.y(), offset.z(), 0, 0, 0);
 	
 	//Create the vertices of a unitary cube
-	vhandle[0] = mesh.add_vertex(MyMesh::Point(-1, -1, 1));  
-  vhandle[1] = mesh.add_vertex(MyMesh::Point( 1, -1, 1));
+	vhandle[0] = mesh.add_vertex(MyMesh::Point(-1, -1, 1));  	// corner 4D
+  vhandle[1] = mesh.add_vertex(MyMesh::Point( 1, -1, 1));   // corner 1D
   vhandle[2] = mesh.add_vertex(MyMesh::Point( 1,  1, 1));   // corner 1
   vhandle[3] = mesh.add_vertex(MyMesh::Point(-1,  1, 1));   // corner 4
-  vhandle[4] = mesh.add_vertex(MyMesh::Point(-1, -1, -1));
-  vhandle[5] = mesh.add_vertex(MyMesh::Point( 1, -1, -1));
+  vhandle[4] = mesh.add_vertex(MyMesh::Point(-1, -1, -1)); 	// corner 3D
+  vhandle[5] = mesh.add_vertex(MyMesh::Point( 1, -1, -1));	// corner 2D
   vhandle[6] = mesh.add_vertex(MyMesh::Point( 1,  1, -1));  // corner 2
   vhandle[7] = mesh.add_vertex(MyMesh::Point(-1,  1, -1));  // corner 3
 	
@@ -92,18 +92,27 @@ TabletopType::~TabletopType()
 {
 }
 
-std::vector<QVec> TabletopType::getCorners()
+std::vector<QVec> TabletopType::getCorners(const QString &parent)
 {
-	std::vector<int> indexes = {2,6,7,3};  //indexes of top layer corners
 	std::vector<QVec> cc;
 	
 	for( auto i: indexes)
 	{
 		MyMesh::Point &pp = mesh.point(vhandle[i]);
-		cc.push_back(QVec::vec3(pp[0],pp[1],pp[2]));
+		cc.push_back(innerModel->transform(parent, QVec::vec3(pp[0],pp[1],pp[2]), name));
 	}
 	return cc;
 }
+
+void TabletopType::moveCornerTo(uint corner, const QVec &pos, const QString &parent)
+{
+	Q_ASSERT( pos.size() > 2 and corner < 5);
+	
+	QVec pp = innerModel->transform(name, pos, parent);
+	mesh.set_point( vhandle[indexes[corner]], MyMesh::Point(pp.x(), pp.y(), pp.z()));
+	mesh.set_point( vhandle[indexesDown[corner]], MyMesh::Point(pp.x(), pp.y(), pp.z()));
+}
+
 
 void TabletopType::makeItThicker(float t)
 {
@@ -127,6 +136,16 @@ void TabletopType::makeItLonger(float w)
 	for(auto vh : vhandle)
 		mesh.set_point( vh, mesh.point(vh)*MyMesh::Point(1,1,w/2));
 }
+
+void TabletopType::makeItLong(uint corner, float w)
+{
+		MyMesh::Point p = mesh.point(vhandle[indexes[corner]]);
+		mesh.set_point( vhandle[indexes[corner]], MyMesh::Point(p[0],p[1],w));
+		//now see what other points are affected 
+		// the one adjacent that gets its z coor modified
+		
+}
+
 
 void TabletopType::render(std::vector< std::vector< cv::Point > >& lines)
 {

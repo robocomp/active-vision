@@ -65,6 +65,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	//Objects
 	table = new TableType("vtable", innerModel);
 	
+	
 	//timer.setSingleShot(true);
 	timer.start(Period);
 
@@ -74,21 +75,41 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 
 void SpecificWorker::compute()
 {
-// 	static Mat gray, depth, frame;
+ 	static Mat gray, depth, frame;
 // 	static std::vector<cv::Point> points;
-// 	static PointSeq pointSeq;
-// 	
+ 	static PointSeq pointSeq;
+
+	float d;
+	PointSeq sample;
+	QVec best;
+	
 	switch( state )
  	{
 		case State::INIT:
 			//qDebug() << "State::INIT";
+			state = State::SENSE;
 			break;
+			
 		case State::TRY_TABLE:
-			qDebug() << "State::TRY_TABLE";
-			if (table->state != TableType::State::STOP)
+			//qDebug() <<__FUNCTION__ << "State::TRY_TABLE";
+			table->update(this);
+			/*if (table->state != TableType::State::STOP)
 				table->update(this);
 			else
 				state  = State::INIT;
+			*/
+			break;
+			
+		case State::SENSE:
+			std::tie(frame, gray, depth, pointSeq) = this->getImage();
+			state = State::FIT_TABLE;
+			break;
+			
+		case State::FIT_TABLE:
+			sample = table->newSample();
+			d = distance( sample, pointSeq);
+			best = metropolis( d );
+			//draw something
 			break;
 	}	
 }
@@ -97,15 +118,26 @@ void SpecificWorker::compute()
 /// Primitives
 ////////////////////
 
+float SpecificWorker::distance(PointSeq, PointSeq)
+{
+
+}
+
+QVec SpecificWorker::metropolis(float)
+{
+
+}
+
+
 std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 {
 	qDebug() << "State::GETIMAGE";
 
-	static RoboCompDifferentialRobot::TBaseState bState;
-  static RoboCompJointMotor::MotorStateMap hState;
-	static RoboCompRGBD::ColorSeq colorSeq;
-	static RoboCompRGBD::DepthSeq depthSeq;
-	static RoboCompRGBD::PointSeq pointSeq;
+	RoboCompDifferentialRobot::TBaseState bState;
+  RoboCompJointMotor::MotorStateMap hState;
+	RoboCompRGBD::ColorSeq colorSeq;
+	RoboCompRGBD::DepthSeq depthSeq;
+	RoboCompRGBD::PointSeq pointSeq;
 	
 	try
 	{
@@ -155,18 +187,17 @@ Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
   for( uint i = 0; i < points.size(); i++ )
 	{
 		samples.at<float>(i,0) = points[i].x;
-		samples.at<float>(i,1) = points[i].y;
+		samples.at<float>(i,1) = points[i].y;	//Se podría meter la coor depth
 	}
   int clusterCount = 4;
   Mat labels;
   int attempts = 5;
   Mat centers;
   cv::kmeans( samples, clusterCount, labels, cv::TermCriteria(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
-																														 10000, 0.0001), attempts, KMEANS_PP_CENTERS, centers );
+							10000, 0.0001), attempts, KMEANS_PP_CENTERS, centers );
 	Points plist;
 	for( int i = 0; i < centers.rows; i++ )
 	{
-		int cluster_idx = labels.at<int>(i,0);
 		cv::Point p(centers.at<float>(i, 0), centers.at<float>(i, 1));
 		cv::circle(frame, p, 4, cv::Scalar(0,255,0) ,3);
 		plist.push_back(p);

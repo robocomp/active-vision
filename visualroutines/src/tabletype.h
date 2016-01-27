@@ -38,16 +38,9 @@ class TableType
 		TableType(const TableType& other);
 		void update(SpecificWorker *handler);
 		~TableType();
-		enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, CLUSTER, DRAW_HARRIS, RENDER_TABLE, SELECT_FIRST_CORNER};
+		RoboCompRGBD::PointSeq newSample(){};
+		enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, CLUSTER, DRAW_HARRIS, RENDER_TABLE, SELECT_FIRST_CORNER, SELECT_SECOND_CORNER};
 		State state = State::INIT;
-	
-		
-		/**
-		 * @brief Renders the object on the camera plane using InnerModel
-		 * 
-		 * @param frame OPenCV image frame where to draw the rendered lines
-		 */
-		void render(cv::Mat& frame);
 		
 	private:
 		// geometric parameters of the object
@@ -63,6 +56,15 @@ class TableType
 		TabletopType *tabletop;
 		
 		std::tuple<int, int> selectFirstCorner(const QPoints& cluster3D);
+		void moveTable(uint corner, const QVec &pos, const QString &parent);
+		
+			
+		/**
+		 * @brief Renders the object on the camera plane using InnerModel
+		 * 
+		 * @param frame OPenCV image frame where to draw the rendered lines
+		 */
+		void render(SpecificWorker *handler, cv::Mat& frame);
 		
 // 		QVec getCornerImage(uint cornerNumber);
 // 		cv::Point getCornerImage(uint cornerNumber);

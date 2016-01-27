@@ -21,7 +21,8 @@
 TableType::TableType(QString _name, InnerModel *_innerModel): height(700), length(900), width(1400), topThickness(80), legWidth(90), innerModel(_innerModel), name(_name)
 {
 	//Creamos unos transforms virtuales en el mundo qe representaran nuestra cog-mesa, De momento cogemos t_table del .xml como origen
-	innerModel->newTransform(name, "static", innerModel->getNode("t_table"), 0, 0, 0, 0, 0, 0);
+	//innerModel->newTransform(name, "static", innerModel->getNode("floor"), 0, 0, 900, 0, 0, 0);
+	innerModel->newTransform(name, "static", innerModel->getNode("floor"), 200, 0, 1050, 0, 0, 0);
 	innerModel->newTransform("vtable_top", "static", innerModel->getNode("vtable"), 0, this->height, 0, 0, 0, 0);
 	//innerModel->newTransform("vtable_down", "static", innerModel->getNode("vtable_top"), 0, -this->topThickness, 0, 0, 0, 0);
 	
@@ -41,13 +42,23 @@ TableType::~TableType()
 {
 }
 
+/**
+ * @brief Create a new sample of the table and compute a set of 3D points along its mesh
+ * 
+ * @return RoboCompRGBD::PointSeq
+ */
+PointSeq TableType::newSample()
+{
+
+}
+
+
 void TableType::update(SpecificWorker *handler)
 {
 	static Mat gray, depth, frame;
 	static RoboCompRGBD::PointSeq pointsSeq;
 	static std::vector<cv::Point> points;
 	static Points clusters;
-	QImage *img;
 	cv::Point currentPoint;
 	static QPoints clusters3D;
 	static std::vector<float> temp;
@@ -83,7 +94,6 @@ void TableType::update(SpecificWorker *handler)
  		case  State::DRAW_HARRIS:
  			qDebug() << "State::Draw";
  			handler->harrisdetector.drawOnImage( frame, points);
- 			//imshow("Harris", frame);
  			state = State::CLUSTER;
  			break;
 			
@@ -107,41 +117,87 @@ void TableType::update(SpecificWorker *handler)
 			
 		//Pick the cluster-corner pair with minimun distance 
 		case State::SELECT_FIRST_CORNER:
+			qDebug() << "State::SELECT_FIRST_CORNER";
 			tie(minCluster, minTable) = selectFirstCorner(clusters3D);	 
 			cv::circle(frame, cv::Point(innerModel->project( "floor", clusters3D[minCluster], "rgbd").x(),
-																	innerModel->project("floor", clusters3D[minCluster], "rgbd").y()),
+																	innerModel->project( "floor", clusters3D[minCluster], "rgbd").y()),
 																	5, cv::Scalar(255,0,255) ,3);
-			state = State::RENDER_TABLE;
-			break;
-			
-					
-		case State::RENDER_TABLE:	
-			qDebug() << "State::RENDER_TABLE";
-			this->render( frame);
-			//imshow("Cog-Table", frame);
-			img = new QImage(frame.data, frame.cols, frame.rows, QImage::Format_RGB888);
-			handler->label->setPixmap(QPixmap::fromImage(*img).scaled(handler->label->width(), handler->label->height()));
-			delete img;
+			cv::circle(frame, cv::Point(innerModel->project( "floor", tabletop->getCorners("floor")[minTable], "rgbd").x(),
+																	innerModel->project( "floor", tabletop->getCorners("floor")[minTable], "rgbd").y()),
+																	5, cv::Scalar(255,0,2559) ,3);
+
+			moveTable(minTable, clusters3D[minCluster], "floor");
+			//tabletop->moveCornerTo(minTable, clusters3D[minCluster], "floor");
+			clusters3D.erase(clusters3D.begin()+minCluster);
+// 			state = State::SELECT_SECOND_CORNER;
+			render(handler, frame);
 			state = State::STOP;
+			break;
+
+				//Pick the second cluster-corner pair with minimun distance 
+		case State::SELECT_SECOND_CORNER:
+			qDebug() << "State::SELECT_SECOND_CORNER";
+			tie(minCluster, minTable) = selectFirstCorner(clusters3D);	 
+			cv::circle(frame, cv::Point(innerModel->project( "floor", clusters3D[minCluster], "rgbd").x(),
+																	innerModel->project( "floor", clusters3D[minCluster], "rgbd").y()),
+																	5, cv::Scalar(55,100,255) ,3);
+			cv::circle(frame, cv::Point(innerModel->project( "floor", tabletop->getCorners("floor")[minTable], "rgbd").x(),
+																	innerModel->project( "floor", tabletop->getCorners("floor")[minTable], "rgbd").y()),
+																	5, cv::Scalar(55,100,255) ,3);
+			
+			tabletop->moveCornerTo(minTable, clusters3D[minCluster], "floor");
+			clusters3D.erase(clusters3D.begin()+minCluster);
+		
+			state = State::STOP;
+			break;
+
+			
+		case State::RENDER_TABLE:	
+// 			qDebug() << "State::RENDER_TABLE";
+				render(handler, frame);
 			break;
 
 		case  State::STOP:
 			qDebug() << "State::STOP";
+			render(handler, frame);
 			break;
 	}
-	
 }
+
+// void TableType::moveTable(uint corner, const QVec& pos, const QString& parent)
+// {
+// 	Q_ASSERT(pos.size()==3);
+// 
+// 	QVec t = innerModel->transform(name, pos, parent) - tabletop->getCorners(name)[corner];
+// 	t = t + innerModel->transform("floor",name);
+// 	innerModel->updateTranslationValues(name,t.x(),t.y(),t.z(),"floor");
+// }
+
+void TableType::moveTable(uint corner, const QVec& pos, const QString& parent)
+{
+	Q_ASSERT(pos.size()==3);
+
+	QVec t = innerModel->transform(name, pos, parent) - tabletop->getCorners(name)[corner];
+	t = innerModel->transform("vtable_top", pos, parent);
+	tabletop->makeItLong(corner, t.z());
+	//tabletop->makeItWider(t.x());
+	
+	//innerModel->updateTranslationValues(name,t.x(),t.y(),t.z(),"floor");
+}
+
 
 std::tuple<int, int> TableType::selectFirstCorner(const QPoints &clusters3D)
 {
-	QPoints qp = tabletop->getCorners();
+	qDebug() << __FUNCTION__;
+	QPoints qp = tabletop->getCorners("floor");
 	float minDist = std::numeric_limits< float >::max(), minCluster=0, minTable=0;
-	int i=0,j=0;
+	uint i=0,j=0;
 	
 	for(i=0; i < clusters3D.size(); i++)
 		for(j=0; j<qp.size(); j++)
 		{
 			float d = (clusters3D[i]-qp[j]).norm2();
+			//qDebug() << __FUNCTION__ << clusters3D[i] << qp[j] << "dist" << d;
 			if ( d < minDist)
 			{
 				minDist = d;
@@ -149,11 +205,13 @@ std::tuple<int, int> TableType::selectFirstCorner(const QPoints &clusters3D)
 				minTable = j;
 			}
 		}
+	//qDebug() << __FUNCTION__ << "harris" << minCluster << "table" << minTable;
 	return std::make_tuple(minCluster,minTable);
 }
 
-void TableType::render(cv::Mat& frame)
-{
+void TableType::render(SpecificWorker *handler, cv::Mat& frame)
+{	
+	qDebug() << __FUNCTION__ ;
 	std::vector< std::vector < cv::Point> > lines;
 	tabletop->render(lines);
 	
@@ -163,78 +221,7 @@ void TableType::render(cv::Mat& frame)
 	//pintamos todas la líneas sobre la imagen
 	cv::polylines(frame, lines, false, cv::Scalar(0,0,200));
 		
+	QImage img(frame.data, frame.cols, frame.rows, QImage::Format_RGB888);
+	handler->label->setPixmap(QPixmap::fromImage(img).scaled(handler->label->width(), handler->label->height()));
 }
 
-//recorremos el tablero muesteando puntos cada 25mm (step)
-// 	std::vector< std::vector < cv::Point> > lines;
-// 	int step = 50;
-// 	for( int x = -this->width/2 ;x < this->width/2; x += step)
-// 	{
-// 		std::vector< cv::Point > line;
-// 		for( int z = -this->length/2 ; z < this->length/2; z += step)
-// 		{
-// 			QVec qi = innerModel->project("rgbd", innerModel->transform("rgbd", QVec::vec3(x,0,z), "vtable_top") , "rgbd");
-// 			line.push_back( cv::Point(qi.x(), qi.y()));
-// 		}
-// 		lines.push_back(line);
-// 	}
-// 	for( int z = -this->length/2 ; z < this->length/2; z += step)		
-// 	{
-// 		std::vector< cv::Point > line;
-// 		for( int x = -this->width/2 ;x < this->width/2; x += step)
-// 		{
-// 			QVec qi = innerModel->project("rgbd", innerModel->transform("rgbd", QVec::vec3(x,0,z), "vtable_top") , "rgbd");
-// 			line.push_back( cv::Point(qi.x(), qi.y()));
-// 		}
-// 		lines.push_back(line);
-// 	}
-
-
-// 	switch( state )
-// 	{
-// 		case State::INIT:
-// 			//qDebug() << "State::INIT";
-// 			state = State::GET_IMAGE;
-// 			break;
-// 			
-// 		case State::GET_IMAGE:
-// 			qDebug() << "State::INIT";
-// 			tie(frame, gray, depth, pointSeq) = handler->getImage();
-// 			// executive.do("GET_IMAGE");
-// 			state = State::HARRIS;
-// 			break;
-// 			
-// 		case  State::HARRIS:
-// 			handler->computeHarrisCorners( gray, points );
-// 			handler->computeHarrisCorners( depth, points );
-// 			// executive.do("HARRIS");
-// 			state = State::FILTER_TABLE_HEIGHT;
-// 			break;
-// 			
-// 		case State::FILTER_TABLE_HEIGHT:
-// 			points = handler->filterTable( pointSeq , points);
-// 			//state = State::DRAW_HARRIS;
-// 			state = State::RENDER_TABLE;
-// 			break;
-// 			
-// 		case  State::DRAW_HARRIS:
-// 			qDebug() << "State::Draw";
-// 			handler->harrisdetector.drawOnImage( frame, points);
-// 			imshow("Harris", frame);
-// 			state = State::RENDER_TABLE;
-// 			break;
-// 			
-// 		case State::RENDER_TABLE:	
-// 			qDebug() << "State::RENDER_TABLE";
-// 			this->render( frame);
-// 			//imshow("Cog-Table", frame);
-// 			img = new QImage(frame.data, frame.cols, frame.rows, QImage::Format_RGB888);
-// 			handler->label->setPixmap(QPixmap::fromImage(*img).scaled(handler->label->width(), handler->label->height()));
-// 			delete img;
-// 			state = State::STOP;
-// 			break;
-// 		case  State::STOP:
-// 			qDebug() << "State::STOP";
-// 			break;
-// 	}
-	

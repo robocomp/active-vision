@@ -5,9 +5,10 @@ SET ( SOURCES
   specificmonitor.cpp
 #  $ENV{ROBOCOMP}/classes/agmInner/agmInner.cpp
 	harrisdetector.cpp
-	tabletype.cpp
-	legtype.cpp
-	tabletoptype.cpp
+#	tabletype.cpp
+#	legtype.cpp
+#	tabletoptype.cpp
+  tableobject.cpp
 )
 
 # Headers set

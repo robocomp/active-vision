@@ -33,7 +33,8 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "harrisdetector.h"
-#include "tabletype.h"
+//#include "tabletype.h"
+#include "tableobject.h"
 
 
 using namespace cv;
@@ -61,7 +62,7 @@ public slots:
 	
 
 private:
-	InnerModel *innerModel;
+	InnerModel *innerModel, *localInnerModel;
 	
 // 	Mat canny(const Mat &img);
 // 	Mat hough(const Mat &img);
@@ -72,10 +73,10 @@ private:
 	//QStateMachine machine;
 	
 	//enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
-	enum class State {INIT, TRY_TABLE, FIT_TABLE, SENSE};
+	enum class State {INIT, FIT_TABLE, SENSE};
 	State state = State::INIT;
 	
-	TableType *table;
+	TableObject table;
 };
 
 #endif

@@ -49,6 +49,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 		if( QFile::exists(QString::fromStdString(par.value)) )
 		{
 			innerModel = new InnerModel(par.value);
+			localInnerModel = new InnerModel("etc/table.xml");
 // 			#ifdef USE_QTGUI
 // 			innerViewer = new InnerModelViewer(innerModel, "root", osgView->getRootGroup(), true);
 // 			show();
@@ -63,7 +64,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	}
 	
 	//Objects
-	table = new TableType("vtable", innerModel);
+	table.setInnerModel(localInnerModel);
 	
 	
 	//timer.setSingleShot(true);
@@ -89,24 +90,15 @@ void SpecificWorker::compute()
 			//qDebug() << "State::INIT";
 			state = State::SENSE;
 			break;
-			
-		case State::TRY_TABLE:
-			//qDebug() <<__FUNCTION__ << "State::TRY_TABLE";
-			table->update(this);
-			/*if (table->state != TableType::State::STOP)
-				table->update(this);
-			else
-				state  = State::INIT;
-			*/
-			break;
-			
+					
 		case State::SENSE:
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
 			state = State::FIT_TABLE;
+			//imshow( "Sensor", depth );
 			break;
 			
 		case State::FIT_TABLE:
-			sample = table->newSample();
+			sample = table.renderPose( best );
 			d = distance( sample, pointSeq);
 			best = metropolis( d );
 			//draw something
@@ -210,7 +202,7 @@ Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
 
 void SpecificWorker::checkTableButton()
 {
-	state = State::TRY_TABLE;
+	//state = State::TRY_TABLE;
 }
 
 

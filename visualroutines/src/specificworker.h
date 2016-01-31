@@ -72,7 +72,7 @@ private:
 // 	Mat hough(const Mat &img);
 	void initMachine();
 	float distance(PointSeq, PointSeq);
-	QVec metropolis( float error, const QVec& pose);
+	QVec metropolis( float error, const QVec& pose, bool reset=false);
 	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, Mat& depth);
 	QVec getRandomOffSet();
 

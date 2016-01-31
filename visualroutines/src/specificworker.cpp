@@ -127,7 +127,7 @@ void SpecificWorker::compute()
 			initialPose = localInnerModel->transform("world","vtable");
 			newPose = localInnerModel->transform("world","vtable") + getRandomOffSet();
 			sample = table.renderPose( newPose, pointSeqW);	
-			
+			metropolis( 0 , QVec() , true);	
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
 			state = State::FIT_TABLE;
 			break;
@@ -233,11 +233,19 @@ float SpecificWorker::distance(PointSeq orig, PointSeq dest)
 	return sum;
 }
 
-QVec SpecificWorker::metropolis(float error, const QVec &pose)
+QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 {
 	static float errorAnt = std::numeric_limits< float >::max();
 	static QVec lastPose = initialPose;
 	static float cont = 0;
+	
+	if(reset)
+	{
+		errorAnt = std::numeric_limits< float >::max();
+		lastPose = initialPose;
+		cont = 0;
+		return QVec();
+	}
 	
 	double p = exp(-error/1000);
 	double pAnt = exp(-errorAnt/1000);

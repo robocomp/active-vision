@@ -5,10 +5,12 @@ SET ( SOURCES
   specificmonitor.cpp
 #  $ENV{ROBOCOMP}/classes/agmInner/agmInner.cpp
 	harrisdetector.cpp
-#	tabletype.cpp
-#	legtype.cpp
-#	tabletoptype.cpp
+	tabletype.cpp
+	legtype.cpp
+	tabletoptype.cpp
   tableobject.cpp
+  glviewer.cpp
+  qcustomplot.cpp
 )
 
 # Headers set
@@ -16,12 +18,13 @@ SET ( HEADERS
   specificworker.h
   specificmonitor.h
 #  $ENV{ROBOCOMP}/classes/agmInner/agmInner.h
+ qcustomplot.h
 )
 
 INCLUDE($ENV{ROBOCOMP}/cmake/modules/opencv2.cmake)
 INCLUDE($ENV{ROBOCOMP}/cmake/modules/ipp.cmake)
 
-SET ( SPECIFIC_LIBS OpenMeshCore )
+SET ( SPECIFIC_LIBS OpenMeshCore QGLViewer glut GL)
 
 ADD_DEFINITIONS( -std=c++11 )
 

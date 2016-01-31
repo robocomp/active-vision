@@ -33,9 +33,12 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "harrisdetector.h"
-//#include "tabletype.h"
+#include "tabletype.h"
 #include "tableobject.h"
-
+#include <QGLViewer/qglviewer.h>
+#include "glviewer.h"
+#include <qcustomplot.h>
+#include "deque.h"
 
 using namespace cv;
 typedef std::vector<cv::Point> Points;
@@ -52,13 +55,14 @@ public:
 	// PRIMITIVES
 	tuple< Mat, Mat, Mat, PointSeq > getImage();
 	void  computeHarrisCorners(const Mat& img, Points &points);
-	vector< Point > filterTable(const PointSeq &pointSeq, const Points &points);
 	HarrisDetector harrisdetector;
 	Points cluster(const Points &points, cv::Mat& frame);
+	std::vector<cv::Point> filterTable(const PointSeq &pointsSeq, const std::vector<cv::Point> &points);
 
 public slots:
 	void compute(); 	
-	void checkTableButton();
+	void resetButtonSlot();
+	void startButtonSlot();
 	
 
 private:
@@ -68,15 +72,25 @@ private:
 // 	Mat hough(const Mat &img);
 	void initMachine();
 	float distance(PointSeq, PointSeq);
-	QVec metropolis( float);
+	QVec metropolis( float error, const QVec& pose);
+	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, Mat& depth);
+	QVec getRandomOffSet();
 
+	
 	//QStateMachine machine;
 	
 	//enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
 	enum class State {INIT, FIT_TABLE, SENSE};
 	State state = State::INIT;
 	
+	GLViewer *viewer;
 	TableObject table;
+	QVec initialPose;
+	Deque<double> xQ,yQ;
+	
+	TableType *tabletype;
+	
+	Mat frameColor, frameColor2;
 };
 
 #endif

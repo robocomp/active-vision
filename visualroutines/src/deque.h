@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 pbustos <email>
+ * Copyright 2016 <copyright holder> <email>
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,24 +15,23 @@
  * 
  */
 
-#ifndef TABLEOBJECT_H
-#define TABLEOBJECT_H
-#include <innermodel/innermodel.h>
-#include <RGBD.h>
+#ifndef DEQUE_H
+#define DEQUE_H
 
-class TableObject
+#include <QtCore>
+
+template <class T> class Deque
 {
 	public:
-		TableObject();
-		~TableObject();
-		void setInnerModel(InnerModel *inner) { innerModel = inner; currentPose = innerModel->transform("world","vtable");};
-		RoboCompRGBD::PointSeq renderPose( const QVec& newPose, const RoboCompRGBD::PointSeq& points);
-		
+		Deque(int mSize=100, int initVal=0)
+			{ maxSize = mSize; l.resize(maxSize); l.fill(initVal);};
+		~Deque(){};
+		void enqueue( const T &d) {l.append(d); if(l.size()>maxSize) l.pop_front(); };
+		QVector<T> getVector(){ return l;};
 	private:
-		InnerModel *innerModel;
-		QString tableName;
-		QVec currentPose;
-		
+		int maxSize;
+		QVector<T> l;
+	
 };
 
-#endif // TABLEOBJECT_H
+#endif // DEQUE_H

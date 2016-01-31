@@ -24,7 +24,28 @@
 SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 {
 	//initMachine();
-	connect(tableButton, SIGNAL(clicked()), this, SLOT(checkTableButton()));
+	 
+		//GLVIEWER
+	viewer = new GLViewer(glviewer);
+	glPointSize(5.0);
+	glDisable(GL_LIGHTING);
+	viewer->resize(frame->width(), frame->height());
+	viewer->showEntireScene();	
+	viewer->show();
+	
+	qsrand(QTime::currentTime().msec());
+	
+	customPlot->addGraph();
+	customPlot->graph(0)->setPen(QPen(Qt::blue)); // line color blue for first graph
+	customPlot->graph(0)->setName("Error");
+	customPlot->xAxis->setRange(0, 100);
+	customPlot->yAxis->setRange(0, 10000);
+	
+ 	for(int i=0; i<100; i++)
+		xQ.enqueue((double)i);		
+	
+	connect(resetButton, SIGNAL(clicked()), this, SLOT(resetButtonSlot()));
+	connect(startButton, SIGNAL(clicked()), this, SLOT(startButtonSlot()));
 }
 
 /**
@@ -32,7 +53,6 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 */
 SpecificWorker::~SpecificWorker()
 {
-	
 }
 
 bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
@@ -63,12 +83,18 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 		qFatal("Error reading config params");
 	}
 	
+	viewer->setGridIsDrawn(true);
+	QVec cam = innerModel->transform("world", "rgbd").normalize();
+  //viewer->camera()->setViewDirection(qglviewer::Vec(cam.x()+0.2,cam.y(),cam.z()));
+	//viewer->camera()->centerScene();
+	
 	//Objects
 	table.setInnerModel(localInnerModel);
 	
+	tabletype = new TableType("tabletype", localInnerModel);
 	
 	//timer.setSingleShot(true);
-	timer.start(Period);
+	timer.start(100);
 
 	return true;
 }
@@ -76,54 +102,180 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 
 void SpecificWorker::compute()
 {
- 	static Mat gray, depth, frame;
-// 	static std::vector<cv::Point> points;
- 	static PointSeq pointSeq;
-
+ 	static Mat gray, depth;
+	static Mat frame(480, 640, CV_8UC3);
+ 	static PointSeq pointSeq, tablePoints;
 	float d;
-	PointSeq sample;
-	QVec best;
+	static  PointSeq sample, pointSeqW;
+	static QVec newPose;
+	QImage img;
+	
 	
 	switch( state )
  	{
 		case State::INIT:
-			//qDebug() << "State::INIT";
-			state = State::SENSE;
+			qDebug() << "State::INIT";
 			break;
 					
 		case State::SENSE:
+			qDebug() << "State::SENSE";
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
+			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
+			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
+			pointSeqW = filterTablePoints(pointSeq, depth);
+			viewer->setSensedCloud(pointSeqW, QVec::vec3(1,0,0));
+			initialPose = localInnerModel->transform("world","vtable");
+			newPose = localInnerModel->transform("world","vtable") + getRandomOffSet();
+			sample = table.renderPose( newPose, pointSeqW);	
+			
+			viewer->setCloud(sample, QVec::vec3(0,1,0));
 			state = State::FIT_TABLE;
-			//imshow( "Sensor", depth );
 			break;
 			
 		case State::FIT_TABLE:
-			sample = table.renderPose( best );
-			d = distance( sample, pointSeq);
-			best = metropolis( d );
-			//draw something
+ 			d = distance( sample, pointSeqW);
+ 			qDebug() << __FUNCTION__ << d;
+			yQ.enqueue(d/1000); 
+			lcdNumber->display(d/1000);
+ 			newPose = metropolis( d , newPose);	
+			sample = table.renderPose( newPose, sample);	
+			
+			tabletype->moveTable(newPose, "world");
+			tabletype->render( frameColor, this->label2 );
+			
+			viewer->setCloud(sample, QVec::vec3(0,1,0));
 			break;
 	}	
+	
+	//Make 3D points move
+	viewer->updateGL();
+	//cv::waitKey(1);
+	//Draw error signal
+	customPlot->graph(0)->setData(xQ.getVector(), yQ.getVector());
+	customPlot->replot(QCustomPlot::rpImmediate);
+	
 }
 
 ////////////////////
 /// Primitives
 ////////////////////
 
-float SpecificWorker::distance(PointSeq, PointSeq)
+QVec SpecificWorker::getRandomOffSet()
 {
-
+	QVec res = QVec::uniformVector(3, -500, 500);
+	res[1]= 0;
+	return res;
 }
 
-QVec SpecificWorker::metropolis(float)
-{
 
+PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, Mat &depth)
+{
+	PointSeq lp;
+	int lowThreshold=50;
+	int ratio = 3;
+	int kernel_size = 5;
+	
+	// filter depthimage
+  cv::Canny( depth, depth, lowThreshold, lowThreshold*ratio, kernel_size );
+	cv::Size size = depth.size();
+	
+	qDebug() << __FUNCTION__ << depth.depth() << size.width << size.height;
+	
+	for (int i=0; i< size.height; i+=4) 
+	{
+		for (int j=0; j< size.width; j+=4) 
+		{
+			if( depth.at<uchar>(i,j) > 0 )
+			{
+				PointXYZ p = points[j+i*size.width];
+				QVec pw = innerModel->transform("world", QVec::vec3(p.x,p.y,p.z),"rgbd"); 			
+				
+				//GET convez hull from innermodel!!!
+				if( pw.y()>100 and pw.z()<1000 )
+				{
+					PointXYZ pn = { pw.x(),pw.y(),pw.z(),0 };
+					lp.push_back(pn);
+				}
+			}
+		}
+	}
+	qDebug() << __FUNCTION__ << lp.size();
+	
+  //imshow( "canny", depth );
+	return lp;
+}
+
+/**
+ * @brief Computes the sum of the minimum distances between the clouds
+ * 
+ * @param  ...
+ * @param  ...
+ * @return float
+ */
+float SpecificWorker::distance(PointSeq orig, PointSeq dest)
+{
+	double sum=0;
+	float minDist = std::numeric_limits< float >::max();
+	float d;
+	
+	//qDebug() << __FUNCTION__ << orig.size() << dest.size();
+	for( auto p : orig )
+	{
+		for( auto q: dest )
+		{
+				d = ((p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y) + (p.z-q.z)*(p.z-q.z));
+				if( d < minDist )
+					minDist = d;
+		}
+		sum += minDist;
+		minDist = std::numeric_limits< float >::max();
+	}
+	return sum;
+}
+
+QVec SpecificWorker::metropolis(float error, const QVec &pose)
+{
+	static float errorAnt = std::numeric_limits< float >::max();
+	static QVec lastPose = initialPose;
+	static float cont = 0;
+	
+	double p = exp(-error/1000);
+	double pAnt = exp(-errorAnt/1000);
+	
+	double ratio = p/pAnt;
+	//qDebug() << __FUNCTION__ << "ratio" << ratio <<p << pAnt;
+	if( ratio >= 1 )
+	{
+		errorAnt = error;
+		lastPose = pose;
+		//qDebug() << __FUNCTION__ << "accetp";
+	}
+	else
+	{	
+		double draw = (double)qrand()/RAND_MAX;
+		if( draw < ratio )
+		{
+			errorAnt = error;
+			lastPose = pose;
+			//qDebug() << __FUNCTION__ << "accetp with draw > ratio" << draw;
+		}
+		//else
+			//qDebug() << __FUNCTION__ << "reject";
+	}
+	
+	// draw a new pose with cooling policy
+	double factor = exp(-cont);
+	QVec delta = QVec::uniformVector(3, -300*factor, 300*factor);
+	cont = cont + 0.05;
+	
+	delta[1]=0;
+	return lastPose + delta;
 }
 
 
 std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 {
-	qDebug() << "State::GETIMAGE";
+	//qDebug() << "State::GETIMAGE";
 
 	RoboCompDifferentialRobot::TBaseState bState;
   RoboCompJointMotor::MotorStateMap hState;
@@ -138,10 +290,10 @@ std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 		Mat frame(480, 640, CV_8UC3,  &(colorSeq)[0]), greyMat;
 		normalize( depth, depth_norm, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
 		convertScaleAbs( depth_norm, depth_norm_scaled );
-		//cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+		cv::cvtColor(frame, frameColor, cv::COLOR_BGR2RGB);
 		cv::cvtColor(frame, greyMat, cv::COLOR_RGB2GRAY);
-		return std::make_tuple(frame, greyMat, depth_norm_scaled, pointSeq);
 		
+		return std::make_tuple(frame, greyMat, depth_norm_scaled, pointSeq);	
 	}
 	catch(const Ice::Exception &e)
 	{	std::cout << "Error reading from Camera" << e << std::endl;	}
@@ -200,9 +352,14 @@ Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
 /// GUI
 ////////////////
 
-void SpecificWorker::checkTableButton()
+void SpecificWorker::resetButtonSlot()
 {
-	//state = State::TRY_TABLE;
+	state = State::INIT;
+}
+
+void SpecificWorker::startButtonSlot()
+{
+	state = State::SENSE;
 }
 
 

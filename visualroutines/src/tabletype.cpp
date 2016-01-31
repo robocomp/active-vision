@@ -23,7 +23,7 @@ TableType::TableType(QString _name, InnerModel *_innerModel): height(700), lengt
 	//Creamos unos transforms virtuales en el mundo qe representaran nuestra cog-mesa, De momento cogemos t_table del .xml como origen
 	//innerModel->newTransform(name, "static", innerModel->getNode("floor"), 0, 0, 900, 0, 0, 0);
 	innerModel->newTransform(name, "static", innerModel->getNode("floor"), 200, 0, 1050, 0, 0, 0);
-	innerModel->newTransform("vtable_top", "static", innerModel->getNode("vtable"), 0, this->height, 0, 0, 0, 0);
+	innerModel->newTransform("vtable_top", "static", innerModel->getNode(name), 0, this->height, 0, 0, 0, 0);
 	//innerModel->newTransform("vtable_down", "static", innerModel->getNode("vtable_top"), 0, -this->topThickness, 0, 0, 0, 0);
 	
 	tabletop = new TabletopType("top", "vtable_top", innerModel, QVec::vec3(0,0,0));
@@ -51,7 +51,6 @@ PointSeq TableType::newSample()
 {
 
 }
-
 
 void TableType::update(SpecificWorker *handler)
 {
@@ -126,11 +125,14 @@ void TableType::update(SpecificWorker *handler)
 																	innerModel->project( "floor", tabletop->getCorners("floor")[minTable], "rgbd").y()),
 																	5, cv::Scalar(255,0,2559) ,3);
 
-			moveTable(minTable, clusters3D[minCluster], "floor");
+			//moveTable(minTable, clusters3D[minCluster], "floor");
+			
+			
 			//tabletop->moveCornerTo(minTable, clusters3D[minCluster], "floor");
 			clusters3D.erase(clusters3D.begin()+minCluster);
 // 			state = State::SELECT_SECOND_CORNER;
-			render(handler, frame);
+			//render(handler, frame);
+			
 			state = State::STOP;
 			break;
 
@@ -154,14 +156,23 @@ void TableType::update(SpecificWorker *handler)
 			
 		case State::RENDER_TABLE:	
 // 			qDebug() << "State::RENDER_TABLE";
-				render(handler, frame);
+				//render(handler, frame);
 			break;
 
 		case  State::STOP:
 			qDebug() << "State::STOP";
-			render(handler, frame);
+			//render(handler, frame);
 			break;
 	}
+}
+
+void TableType::moveTable(const QVec& pos, const QString& parent)
+{
+	Q_ASSERT(pos.size()==3);
+
+	//QVec t = innerModel->transform(name, pos, parent) - tabletop->getCorners(name)[corner];
+	//t = t + innerModel->transform("floor",name);
+	innerModel->updateTranslationValues(name,pos.x(),pos.y(),pos.z(),parent);
 }
 
 // void TableType::moveTable(uint corner, const QVec& pos, const QString& parent)
@@ -169,21 +180,12 @@ void TableType::update(SpecificWorker *handler)
 // 	Q_ASSERT(pos.size()==3);
 // 
 // 	QVec t = innerModel->transform(name, pos, parent) - tabletop->getCorners(name)[corner];
-// 	t = t + innerModel->transform("floor",name);
-// 	innerModel->updateTranslationValues(name,t.x(),t.y(),t.z(),"floor");
+// 	t = innerModel->transform("vtable_top", pos, parent);
+// 	tabletop->makeItLong(corner, t.z());
+// 	//tabletop->makeItWider(t.x());
+// 	
+// 	//innerModel->updateTranslationValues(name,t.x(),t.y(),t.z(),"floor");
 // }
-
-void TableType::moveTable(uint corner, const QVec& pos, const QString& parent)
-{
-	Q_ASSERT(pos.size()==3);
-
-	QVec t = innerModel->transform(name, pos, parent) - tabletop->getCorners(name)[corner];
-	t = innerModel->transform("vtable_top", pos, parent);
-	tabletop->makeItLong(corner, t.z());
-	//tabletop->makeItWider(t.x());
-	
-	//innerModel->updateTranslationValues(name,t.x(),t.y(),t.z(),"floor");
-}
 
 
 std::tuple<int, int> TableType::selectFirstCorner(const QPoints &clusters3D)
@@ -209,7 +211,7 @@ std::tuple<int, int> TableType::selectFirstCorner(const QPoints &clusters3D)
 	return std::make_tuple(minCluster,minTable);
 }
 
-void TableType::render(SpecificWorker *handler, cv::Mat& frame)
+void TableType::render(const cv::Mat& frame, QLabel *label)
 {	
 	qDebug() << __FUNCTION__ ;
 	std::vector< std::vector < cv::Point> > lines;
@@ -219,9 +221,10 @@ void TableType::render(SpecificWorker *handler, cv::Mat& frame)
 		l->render(lines);
 	
 	//pintamos todas la líneas sobre la imagen
-	cv::polylines(frame, lines, false, cv::Scalar(0,0,200));
-		
-	QImage img(frame.data, frame.cols, frame.rows, QImage::Format_RGB888);
-	handler->label->setPixmap(QPixmap::fromImage(img).scaled(handler->label->width(), handler->label->height()));
+	Mat m = frame.clone();
+	cv::polylines(m, lines, false, cv::Scalar(0,0,200));
+
+ 	QImage img(m.data, m.cols, m.rows, QImage::Format_RGB888);
+ 	label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
 }
 

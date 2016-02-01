@@ -106,7 +106,7 @@ void SpecificWorker::compute()
 	static Mat frame(480, 640, CV_8UC3);
  	static PointSeq pointSeq, tablePoints;
 	float d;
-	static  PointSeq sample, pointSeqW;
+	static  PointSeq sample, pointSeqW, pointSeqWNoise;
 	static QVec newPose;
 	QImage img;
 	
@@ -122,10 +122,11 @@ void SpecificWorker::compute()
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
 			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-			pointSeqW = filterTablePoints(pointSeq, depth);
-			viewer->setSensedCloud(pointSeqW, QVec::vec3(1,0,0));
+			pointSeqWNoise = filterTablePoints(pointSeq, depth, true);
+			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
 			initialPose = localInnerModel->transform("world","vtable");
 			newPose = localInnerModel->transform("world","vtable") + getRandomOffSet();
+			pointSeqW = filterTablePoints(pointSeq, depth, false);
 			sample = table.renderPose( newPose, pointSeqW);	
 			metropolis( 0 , QVec() , true);	
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
@@ -133,7 +134,7 @@ void SpecificWorker::compute()
 			break;
 			
 		case State::FIT_TABLE:
- 			d = distance( sample, pointSeqW);
+ 			d = distance( sample, pointSeqWNoise);
  			qDebug() << __FUNCTION__ << d;
 			yQ.enqueue(d/1000); 
 			lcdNumber->display(d/1000);
@@ -162,13 +163,13 @@ void SpecificWorker::compute()
 
 QVec SpecificWorker::getRandomOffSet()
 {
-	QVec res = QVec::uniformVector(3, -500, 500);
+	QVec res = QVec::uniformVector(3, -1000, 1000);
 	res[1]= 0;
 	return res;
 }
 
 
-PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, Mat &depth)
+PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, Mat &depth, bool addNoise)
 {
 	PointSeq lp;
 	int lowThreshold=50;
@@ -193,6 +194,8 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, Mat &depth)
 				//GET convez hull from innermodel!!!
 				if( pw.y()>100 and pw.z()<1000 )
 				{
+					if( addNoise) 
+						pw = pw + QVec::uniformVector(3, -50, 50);
 					PointXYZ pn = { pw.x(),pw.y(),pw.z(),0 };
 					lp.push_back(pn);
 				}

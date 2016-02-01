@@ -73,7 +73,7 @@ private:
 	void initMachine();
 	float distance(PointSeq, PointSeq);
 	QVec metropolis( float error, const QVec& pose, bool reset=false);
-	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, Mat& depth);
+	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, Mat& depth, bool addNoise=false);
 	QVec getRandomOffSet();
 
 	

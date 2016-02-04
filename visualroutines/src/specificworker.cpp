@@ -27,7 +27,7 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 	 
 		//GLVIEWER
 	viewer = new GLViewer(glviewer);
-	glPointSize(5.0);
+	glPointSize(15.0);
 	glDisable(GL_LIGHTING);
 	viewer->resize(frame->width(), frame->height());
 	viewer->showEntireScene();	
@@ -37,12 +37,18 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 	
 	customPlot->addGraph();
 	customPlot->graph(0)->setPen(QPen(Qt::blue)); // line color blue for first graph
-	customPlot->graph(0)->setName("Error");
+	customPlot->graph(0)->setName("Fit Error");
 	customPlot->xAxis->setRange(0, 100);
 	customPlot->yAxis->setRange(0, 10000);
 	
+	customPlot->addGraph();
+	customPlot->graph(1)->setPen(QPen(Qt::green)); // line color blue for first graph
+	customPlot->graph(1)->setName("Pose Error");
+	customPlot->xAxis->setRange(0, 100);
+	customPlot->yAxis->setRange(0, 1000);
+	
  	for(int i=0; i<100; i++)
-		xQ.enqueue((double)i);		
+		{	xQ.enqueue((double)i);yposeTQ.enqueue((double)i); yposeRQ.enqueue((double)i);}
 	
 	connect(resetButton, SIGNAL(clicked()), this, SLOT(resetButtonSlot()));
 	connect(startButton, SIGNAL(clicked()), this, SLOT(startButtonSlot()));
@@ -122,14 +128,22 @@ void SpecificWorker::compute()
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
 			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-			pointSeqWNoise = filterTablePoints(pointSeq, depth, true);
+			pointSeqWNoise = filterTablePoints(pointSeq, depth, false);
+			
 			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
+			
 			initialPose = localInnerModel->transform("world","vtable");
 			newPose = localInnerModel->transform("world","vtable") + getRandomOffSet();
+			
 			pointSeqW = filterTablePoints(pointSeq, depth, false);
 			sample = table.renderPose( newPose, pointSeqW);	
-			metropolis( 0 , QVec() , true);	
+			
+ 			//sample = table.renderPose( initialPose, pointSeqW);	
+ 			
+ 			metropolis( 0 , QVec() , true);	
+			qDebug()<< __FUNCTION__ << sample.size() << pointSeqWNoise.size();
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
+			
 			state = State::FIT_TABLE;
 			break;
 			
@@ -139,6 +153,7 @@ void SpecificWorker::compute()
 			yQ.enqueue(d/1000); 
 			lcdNumber->display(d/1000);
  			newPose = metropolis( d , newPose);	
+			yposeTQ.enqueue((initialPose - newPose).norm2());
 			sample = table.renderPose( newPose, sample);	
 			
 			tabletype->moveTable(newPose, "world");
@@ -153,6 +168,7 @@ void SpecificWorker::compute()
 	//cv::waitKey(1);
 	//Draw error signal
 	customPlot->graph(0)->setData(xQ.getVector(), yQ.getVector());
+	customPlot->graph(1)->setData(xQ.getVector(), yposeTQ.getVector());
 	customPlot->replot(QCustomPlot::rpImmediate);
 	
 }
@@ -169,7 +185,7 @@ QVec SpecificWorker::getRandomOffSet()
 }
 
 
-PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, Mat &depth, bool addNoise)
+PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, const Mat &depth, bool addNoise)
 {
 	PointSeq lp;
 	int lowThreshold=50;
@@ -177,16 +193,17 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, Mat &depth, b
 	int kernel_size = 5;
 	
 	// filter depthimage
-  cv::Canny( depth, depth, lowThreshold, lowThreshold*ratio, kernel_size );
+	Mat depthF;
+  cv::Canny( depth, depthF, lowThreshold, lowThreshold*ratio, kernel_size );
 	cv::Size size = depth.size();
 	
-	qDebug() << __FUNCTION__ << depth.depth() << size.width << size.height;
+	qDebug() << __FUNCTION__ << "points" << points.size() << size.width << size.height;
 	
 	for (int i=0; i< size.height; i+=4) 
 	{
 		for (int j=0; j< size.width; j+=4) 
 		{
-			if( depth.at<uchar>(i,j) > 0 )
+			if( depthF.at<uchar>(i,j) > 0 )
 			{
 				PointXYZ p = points[j+i*size.width];
 				QVec pw = innerModel->transform("world", QVec::vec3(p.x,p.y,p.z),"rgbd"); 			
@@ -196,6 +213,7 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, Mat &depth, b
 				{
 					if( addNoise) 
 						pw = pw + QVec::uniformVector(3, -50, 50);
+					
 					PointXYZ pn = { pw.x(),pw.y(),pw.z(),0 };
 					lp.push_back(pn);
 				}

@@ -73,9 +73,9 @@ private:
 	void initMachine();
 	float distance(PointSeq, PointSeq);
 	QVec metropolis( float error, const QVec& pose, bool reset=false);
-	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, Mat& depth, bool addNoise=false);
+	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, const Mat& depth, bool addNoise = false);
 	QVec getRandomOffSet();
-
+	
 	
 	//QStateMachine machine;
 	
@@ -86,7 +86,7 @@ private:
 	GLViewer *viewer;
 	TableObject table;
 	QVec initialPose;
-	Deque<double> xQ,yQ;
+	Deque<double> xQ,yQ,yposeTQ, yposeRQ;
 	
 	TableType *tabletype;
 	

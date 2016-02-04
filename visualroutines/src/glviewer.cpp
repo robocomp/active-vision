@@ -34,7 +34,6 @@ void GLViewer::setSensedCloud(const RoboCompRGBD::PointSeq& points, QVec color)
 {
 	sensed = points;
 	sensedCol = color;
-	
 }
 
 void GLViewer::initializeGL()

@@ -98,7 +98,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	//Objects
 	table.setInnerModel(localInnerModel);
 	
-	tabletype = new TableType("tabletype", localInnerModel);
+	tabletype = new TableType("vtable_t", localInnerModel);
 	
 	//timer.setSingleShot(true);
 	timer.start(50);
@@ -109,9 +109,9 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 
 void SpecificWorker::compute()
 {
- 	static Mat gray, depth, depthRender;
-	static Mat frame(480, 640, CV_8UC3);
- 	static PointSeq pointSeq, tablePoints, pointsRender;
+ 	static Mat gray, grayR, depth, depthR;
+	static Mat frame(480, 640, CV_8UC3), frameR(480, 640, CV_8UC3);
+ 	static PointSeq pointSeq, pointSeqR; 
 	float d;
 	static  PointSeq sample, pointSeqW, pointSeqWNoise;
 	static QVec newPose;
@@ -121,7 +121,7 @@ void SpecificWorker::compute()
 	switch( state )
  	{
 		case State::INIT:
-			qDebug() << "State::INIT";
+			//qDebug() << "State::INIT";
 			break;
 					
 		case State::SENSE:
@@ -129,49 +129,41 @@ void SpecificWorker::compute()
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
 			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-			pointSeqWNoise = filterTablePoints(pointSeq, depth, false);
+			pointSeqWNoise = filterTablePoints(pointSeq, depth, true);
 			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
 			
 			// ground truth according to .xml
-			correctPose = innerModel->transform("world","table_t");
+			correctPose = innerModel->transform6D("world","table_t");
 			
 			// compute initial search pose
-			offset = getRandomOffSet();
-			localInnerModel->updateTransformValues("vtable_t", 0,0,0, offset.x(), offset.y(), offset.z() );
-			//newPose = localInnerModel->transform("world","vtable_t") + getRandomOffSet();
-			newPose = localInnerModel->transform("world","vtable_t");
-			renderAndGenerateImages(pointsRender, depthRender);
-// 			pointSeqW = filterTablePoints(pointSeq, depth, false);
-			sample = filterTablePoints(pointsRender, depthRender, false);
-	
-//	  sample = table.renderPose( newPose, pointSeqW);	
+			newPose = correctPose + getRandomOffSet();
+			localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), (2*qrand()/(float)RAND_MAX)-1, newPose.rz());
 			
+			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
+			
+			sample = filterTablePoints(pointSeqR, depthR, false);			
 			metropolis( 0 , QVec() , true);	
-			qDebug()<< __FUNCTION__ << sample.size();
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
-			
+		
+			//state = State::INIT;
 			state = State::FIT_TABLE;
 			break;
 			
 		case State::FIT_TABLE:
- 			d = distance( sample, pointSeqWNoise);
-			
- 			qDebug() << __FUNCTION__ << d;
-			yQ.enqueue(d/1000); 
-			lcdNumber->display(d/1000);
-			
+ 			d = distance( sample, pointSeqWNoise);	
  			newPose = metropolis( d , newPose);	
-			localInnerModel->updateTransformValues("vtable_t", 0,0,0, newPose.x(), newPose.y(), newPose.z() );
-			renderAndGenerateImages(pointsRender, depthRender);
-			sample = filterTablePoints(pointsRender, depthRender, false);
-//			sample = table.renderPose( newPose, sample);	
+			localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), newPose.ry(), newPose.rz() );
+			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
+			sample = filterTablePoints(pointSeqR, depthR, false);
 			
 			tabletype->moveTable(newPose, "world");
-			tabletype->render( frameColor, this->label2 );
-			
+			tabletype->render( frameColor, this->label2 );			
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
-			
-			yposeTQ.enqueue((correctPose - newPose).norm2());
+			float poseErr = (correctPose - newPose).norm2();
+			yposeTQ.enqueue( poseErr );
+			yQ.enqueue(d/1000); 
+			lcdNumber->display(poseErr);
+			qDebug() << __FUNCTION__ << "cloud distance: "<< d << "pose distance:" << poseErr << "sample size:" << sample.size() << "real size:" << pointSeqWNoise.size();
 			break;
 	}	
 	
@@ -189,10 +181,11 @@ void SpecificWorker::compute()
 /// Primitives
 ////////////////////
 
-void SpecificWorker::renderAndGenerateImages(RoboCompRGBD::PointSeq &points, Mat &depth)
+tuple< Mat, Mat, Mat, PointSeq > SpecificWorker::renderAndGenerateImages()
 {
-	RoboCompRGBD::ColorSeq color;
-	RoboCompRGBD::DepthSeq depthPoints;
+	RoboCompRGBD::ColorSeq colorSeq;
+	RoboCompRGBD::DepthSeq depthSeq;
+	RoboCompRGBD::PointSeq pointSeq;
 
 	IMVCamera cam = innerViewer->cameras["rgbd"];
 	const int width = cam.RGBDNode->width;
@@ -200,17 +193,17 @@ void SpecificWorker::renderAndGenerateImages(RoboCompRGBD::PointSeq &points, Mat
 	const float focal = float(cam.RGBDNode->focal);
 	double fovy, aspectRatio, Zn, Zf;
 	
-	if (color.size() != (uint)(width*height))
-	{
-		color.resize ( width*height );
-		depthPoints.resize ( width*height );
-		points.resize ( width*height );
-	}
-	
 	innerViewer->update();
 	osgView->autoResize();
 	osgView->frame();
 	cam.viewerCamera->frame();
+	
+	if (colorSeq.size() != (uint)(width*height))
+	{
+		colorSeq.resize ( width*height );
+		depthSeq.resize ( width*height );
+		pointSeq.resize ( width*height );
+	}
 	
 	RTMat rt = innerModel->getTransformationMatrix("root", "rgbd");
 	innerViewer->cameras["rgbd"].viewerCamera->getCameraManipulator()->setByMatrix(QMatToOSGMat4(rt));
@@ -224,32 +217,37 @@ void SpecificWorker::renderAndGenerateImages(RoboCompRGBD::PointSeq &points, Mat
 		{
 			const int index  = j + i*width;
 			const int indexI = j + (height-1-i)*width;
-			color[index].red   = rgb[3*indexI+0];
-			color[index].green = rgb[3*indexI+1];
-			color[index].blue  = rgb[3*indexI+2];
+			colorSeq[index].red   = rgb[3*indexI+0];
+			colorSeq[index].green = rgb[3*indexI+1];
+			colorSeq[index].blue  = rgb[3*indexI+2];
 			if (d[indexI] <= 1.)
 			{
-				depthPoints[index] = Zn*Zf / ( Zf - d[indexI]* ( Zf-Zn ) );
+				depthSeq[index] = Zn*Zf / ( Zf - d[indexI]* ( Zf-Zn ) );
 			}
 			else
 			{
-				depthPoints[i] = NAN;
+				depthSeq[i] = NAN;
 			}
-  		points[index].x = depthPoints[index] * (float(j)    - (width/2.)) / focal;
-			points[index].y = depthPoints[index] * ((height/2.) -   float(i)) / focal;
-			points[index].z = depthPoints[index];
-			points[index].w = 1.;
+  		pointSeq[index].x = depthSeq[index] * (float(j)    - (width/2.)) / focal;
+			pointSeq[index].y = depthSeq[index] * ((height/2.) -   float(i)) / focal;
+			pointSeq[index].z = depthSeq[index];
+			pointSeq[index].w = 1.;
 		}
 	}
-	Mat depth_image(480, 640, CV_32FC1,  &(depthPoints)[0]), depth_norm;
+	Mat frame(480, 640, CV_8UC3,  &(colorSeq)[0]), greyMat;
+	cv::cvtColor(frame, greyMat, cv::COLOR_RGB2GRAY);
+	Mat depth_image(480, 640, CV_32FC1,  &(depthSeq)[0]), depth_norm, depth_norm_scaled;
 	normalize( depth_image, depth_norm, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
-	convertScaleAbs( depth_norm, depth );
+	convertScaleAbs( depth_norm, depth_norm_scaled );
+	return std::make_tuple(frame, greyMat, depth_norm_scaled, pointSeq);	
 }
 
 QVec SpecificWorker::getRandomOffSet()
 {
-	QVec res = QVec::uniformVector(3, -1000, 1000);
-	res[1]= 0;
+	QVec res(6); 
+	res.inject(QVec::uniformVector(3, -300, 300),0);
+	res.inject(QVec::uniformVector(3, -0.5, 0.5),3);
+	res[1]= 0; res[3]=0; res[5] = 0;
 	return res;
 }
 
@@ -272,16 +270,16 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, const Mat &de
 	{
 		for (int j=0; j< size.width; j+=4) 
 		{
+			//qDebug() << __FUNCTION__ << depth.at<uchar>(i,j) << depthF.at<uchar>(i,j);
 			if( depthF.at<uchar>(i,j) > 0 )
 			{
 				PointXYZ p = points[j+i*size.width];
 				QVec pw = innerModel->transform("world", QVec::vec3(p.x,p.y,p.z),"rgbd"); 			
-				
 				//GET convez hull from innermodel!!!
 				if( pw.y()>100 and pw.z()<1000 )
 				{
 					if( addNoise) 
-						pw = pw + QVec::uniformVector(3, -50, 50);
+						pw = pw + QVec::uniformVector(3, -30, 30);
 					
 					PointXYZ pn = { pw.x(),pw.y(),pw.z(),0 };
 					lp.push_back(pn);
@@ -302,23 +300,26 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, const Mat &de
  * @param  ...
  * @return float
  */
+
 float SpecificWorker::distance(PointSeq orig, PointSeq dest)
 {
 	double sum=0;
-	float minDist = std::numeric_limits< float >::max();
-	float d;
+	//float d;
 	
-	//qDebug() << __FUNCTION__ << orig.size() << dest.size();
-	for( auto p : orig )
+	#pragma omp parallel
+	for( uint i=0; i<orig.size(); i++ )
 	{
-		for( auto q: dest )
+		float minDist = std::numeric_limits< float >::max();
+		float d;
+		for( uint j=0; j< dest.size(); j++ )
 		{
+				PointXYZ &p = orig[i];
+				PointXYZ &q = dest[j];
 				d = ((p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y) + (p.z-q.z)*(p.z-q.z));
 				if( d < minDist )
 					minDist = d;
 		}
 		sum += minDist;
-		minDist = std::numeric_limits< float >::max();
 	}
 	return sum;
 }
@@ -363,10 +364,17 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 	
 	// draw a new pose with cooling policy
 	double factor = exp(-cont);
-	QVec delta = QVec::uniformVector(3, -300*factor, 300*factor);
-	cont = cont + 0.05;
+	//QVec delta = QVec::uniformVector(3, -300*factor, 300*factor);
+	//QVec delta = getRandomOffSet()*(float)factor;
+	QVec delta = getRandomOffSet();
+	delta[0] *= factor;
+	delta[1] *= factor;
+	delta[2] *= factor;
+	delta[3] *= factor/1000.f;
+	delta[4] *= factor/1000.f;
+	delta[5] *= factor/1000.f;
 	
-	delta[1]=0;
+	cont = cont + 0.05;	
 	return lastPose + delta;
 }
 

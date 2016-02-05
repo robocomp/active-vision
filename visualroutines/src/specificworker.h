@@ -41,7 +41,7 @@
 #include "deque.h"
 #include <osgviewer/osgview.h>
 #include <innermodel/innermodelviewer.h>
-
+#include <omp.h>
 
 using namespace cv;
 typedef std::vector<cv::Point> Points;
@@ -78,7 +78,7 @@ private:
 	QVec metropolis( float error, const QVec& pose, bool reset=false);
 	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, const Mat& depth, bool addNoise = false);
 	QVec getRandomOffSet();
-	void renderAndGenerateImages( RoboCompRGBD::PointSeq &points, Mat &depth);
+	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
 	
 	
 	//QStateMachine machine;

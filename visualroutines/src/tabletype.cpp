@@ -18,11 +18,14 @@
 #include "tabletype.h"
 #include "specificworker.h"
 
-TableType::TableType(QString _name, InnerModel *_innerModel): height(700), length(900), width(1400), topThickness(80), legWidth(90), innerModel(_innerModel), name(_name)
+TableType::TableType(QString _name, InnerModel *_innerModel): height(700), length(900), width(1400), 
+																															topThickness(80), legWidth(90), innerModel(_innerModel), name(_name)
 {
 	//Creamos unos transforms virtuales en el mundo qe representaran nuestra cog-mesa, De momento cogemos t_table del .xml como origen
 	//innerModel->newTransform(name, "static", innerModel->getNode("floor"), 0, 0, 900, 0, 0, 0);
-	innerModel->newTransform(name, "static", innerModel->getNode("floor"), 200, 0, 1050, 0, 0, 0);
+	
+	//innerModel->newTransform(name, "static", innerModel->getNode("floor"), 200, 0, 1050, 0, 0, 0);
+	
 	innerModel->newTransform("vtable_top", "static", innerModel->getNode(name), 0, this->height, 0, 0, 0, 0);
 	//innerModel->newTransform("vtable_down", "static", innerModel->getNode("vtable_top"), 0, -this->topThickness, 0, 0, 0, 0);
 	
@@ -168,11 +171,11 @@ void TableType::update(SpecificWorker *handler)
 
 void TableType::moveTable(const QVec& pos, const QString& parent)
 {
-	Q_ASSERT(pos.size()==3);
+	Q_ASSERT(pos.size()==6);
 
 	//QVec t = innerModel->transform(name, pos, parent) - tabletop->getCorners(name)[corner];
 	//t = t + innerModel->transform("floor",name);
-	innerModel->updateTranslationValues(name,pos.x(),pos.y(),pos.z(),parent);
+	innerModel->updateTransformValues(name,pos.x(),pos.y(),pos.z(),pos.rx(), pos.ry(), pos.rz(),parent);
 }
 
 // void TableType::moveTable(uint corner, const QVec& pos, const QString& parent)

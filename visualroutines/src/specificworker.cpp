@@ -33,6 +33,9 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 	viewer->showEntireScene();	
 	viewer->show();
 	
+	osgView = new OsgView(this->frameInner);
+	show();
+	
 	qsrand(QTime::currentTime().msec());
 	
 	customPlot->addGraph();
@@ -76,10 +79,8 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 		{
 			innerModel = new InnerModel(par.value);
 			localInnerModel = new InnerModel("etc/table.xml");
-// 			#ifdef USE_QTGUI
-// 			innerViewer = new InnerModelViewer(innerModel, "root", osgView->getRootGroup(), true);
-// 			show();
-// 			#endif
+			innerViewer = new InnerModelViewer(localInnerModel, "root", osgView->getRootGroup(), false);
+			//localInnerModel->print();
 		}
 		else
 		{ std::cout << "Innermodel path " << par.value << " not found. "; qFatal("Abort");	}
@@ -100,7 +101,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	tabletype = new TableType("tabletype", localInnerModel);
 	
 	//timer.setSingleShot(true);
-	timer.start(100);
+	timer.start(50);
 
 	return true;
 }
@@ -108,14 +109,14 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 
 void SpecificWorker::compute()
 {
- 	static Mat gray, depth;
+ 	static Mat gray, depth, depthRender;
 	static Mat frame(480, 640, CV_8UC3);
- 	static PointSeq pointSeq, tablePoints;
+ 	static PointSeq pointSeq, tablePoints, pointsRender;
 	float d;
 	static  PointSeq sample, pointSeqW, pointSeqWNoise;
 	static QVec newPose;
 	QImage img;
-	
+	QVec offset;
 	
 	switch( state )
  	{
@@ -129,19 +130,24 @@ void SpecificWorker::compute()
 			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
 			pointSeqWNoise = filterTablePoints(pointSeq, depth, false);
-			
 			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
 			
-			initialPose = localInnerModel->transform("world","vtable");
-			newPose = localInnerModel->transform("world","vtable") + getRandomOffSet();
+			// ground truth according to .xml
+			correctPose = innerModel->transform("world","table_t");
 			
-			pointSeqW = filterTablePoints(pointSeq, depth, false);
-			sample = table.renderPose( newPose, pointSeqW);	
+			// compute initial search pose
+			offset = getRandomOffSet();
+			localInnerModel->updateTransformValues("vtable_t", 0,0,0, offset.x(), offset.y(), offset.z() );
+			//newPose = localInnerModel->transform("world","vtable_t") + getRandomOffSet();
+			newPose = localInnerModel->transform("world","vtable_t");
+			renderAndGenerateImages(pointsRender, depthRender);
+// 			pointSeqW = filterTablePoints(pointSeq, depth, false);
+			sample = filterTablePoints(pointsRender, depthRender, false);
+	
+//	  sample = table.renderPose( newPose, pointSeqW);	
 			
- 			//sample = table.renderPose( initialPose, pointSeqW);	
- 			
- 			metropolis( 0 , QVec() , true);	
-			qDebug()<< __FUNCTION__ << sample.size() << pointSeqWNoise.size();
+			metropolis( 0 , QVec() , true);	
+			qDebug()<< __FUNCTION__ << sample.size();
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
 			
 			state = State::FIT_TABLE;
@@ -149,23 +155,29 @@ void SpecificWorker::compute()
 			
 		case State::FIT_TABLE:
  			d = distance( sample, pointSeqWNoise);
+			
  			qDebug() << __FUNCTION__ << d;
 			yQ.enqueue(d/1000); 
 			lcdNumber->display(d/1000);
+			
  			newPose = metropolis( d , newPose);	
-			yposeTQ.enqueue((initialPose - newPose).norm2());
-			sample = table.renderPose( newPose, sample);	
+			localInnerModel->updateTransformValues("vtable_t", 0,0,0, newPose.x(), newPose.y(), newPose.z() );
+			renderAndGenerateImages(pointsRender, depthRender);
+			sample = filterTablePoints(pointsRender, depthRender, false);
+//			sample = table.renderPose( newPose, sample);	
 			
 			tabletype->moveTable(newPose, "world");
 			tabletype->render( frameColor, this->label2 );
 			
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
+			
+			yposeTQ.enqueue((correctPose - newPose).norm2());
 			break;
 	}	
 	
 	//Make 3D points move
 	viewer->updateGL();
-	//cv::waitKey(1);
+
 	//Draw error signal
 	customPlot->graph(0)->setData(xQ.getVector(), yQ.getVector());
 	customPlot->graph(1)->setData(xQ.getVector(), yposeTQ.getVector());
@@ -176,6 +188,63 @@ void SpecificWorker::compute()
 ////////////////////
 /// Primitives
 ////////////////////
+
+void SpecificWorker::renderAndGenerateImages(RoboCompRGBD::PointSeq &points, Mat &depth)
+{
+	RoboCompRGBD::ColorSeq color;
+	RoboCompRGBD::DepthSeq depthPoints;
+
+	IMVCamera cam = innerViewer->cameras["rgbd"];
+	const int width = cam.RGBDNode->width;
+	const int height = cam.RGBDNode->height;
+	const float focal = float(cam.RGBDNode->focal);
+	double fovy, aspectRatio, Zn, Zf;
+	
+	if (color.size() != (uint)(width*height))
+	{
+		color.resize ( width*height );
+		depthPoints.resize ( width*height );
+		points.resize ( width*height );
+	}
+	
+	innerViewer->update();
+	osgView->autoResize();
+	osgView->frame();
+	cam.viewerCamera->frame();
+	
+	RTMat rt = innerModel->getTransformationMatrix("root", "rgbd");
+	innerViewer->cameras["rgbd"].viewerCamera->getCameraManipulator()->setByMatrix(QMatToOSGMat4(rt));
+	cam.viewerCamera->getCamera()->getProjectionMatrixAsPerspective(fovy, aspectRatio, Zn, Zf);
+
+	const unsigned char *rgb = cam.rgb->data();
+	const float *d = (float *)cam.d->data();
+	for (int i=0; i<height; ++i)
+	{
+		for (int j=0; j<width; ++j)
+		{
+			const int index  = j + i*width;
+			const int indexI = j + (height-1-i)*width;
+			color[index].red   = rgb[3*indexI+0];
+			color[index].green = rgb[3*indexI+1];
+			color[index].blue  = rgb[3*indexI+2];
+			if (d[indexI] <= 1.)
+			{
+				depthPoints[index] = Zn*Zf / ( Zf - d[indexI]* ( Zf-Zn ) );
+			}
+			else
+			{
+				depthPoints[i] = NAN;
+			}
+  		points[index].x = depthPoints[index] * (float(j)    - (width/2.)) / focal;
+			points[index].y = depthPoints[index] * ((height/2.) -   float(i)) / focal;
+			points[index].z = depthPoints[index];
+			points[index].w = 1.;
+		}
+	}
+	Mat depth_image(480, 640, CV_32FC1,  &(depthPoints)[0]), depth_norm;
+	normalize( depth_image, depth_norm, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
+	convertScaleAbs( depth_norm, depth );
+}
 
 QVec SpecificWorker::getRandomOffSet()
 {
@@ -257,13 +326,13 @@ float SpecificWorker::distance(PointSeq orig, PointSeq dest)
 QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 {
 	static float errorAnt = std::numeric_limits< float >::max();
-	static QVec lastPose = initialPose;
+	static QVec lastPose = correctPose;
 	static float cont = 0;
 	
 	if(reset)
 	{
 		errorAnt = std::numeric_limits< float >::max();
-		lastPose = initialPose;
+		lastPose = correctPose;
 		cont = 0;
 		return QVec();
 	}

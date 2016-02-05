@@ -39,6 +39,9 @@
 #include "glviewer.h"
 #include <qcustomplot.h>
 #include "deque.h"
+#include <osgviewer/osgview.h>
+#include <innermodel/innermodelviewer.h>
+
 
 using namespace cv;
 typedef std::vector<cv::Point> Points;
@@ -75,6 +78,7 @@ private:
 	QVec metropolis( float error, const QVec& pose, bool reset=false);
 	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, const Mat& depth, bool addNoise = false);
 	QVec getRandomOffSet();
+	void renderAndGenerateImages( RoboCompRGBD::PointSeq &points, Mat &depth);
 	
 	
 	//QStateMachine machine;
@@ -85,12 +89,15 @@ private:
 	
 	GLViewer *viewer;
 	TableObject table;
-	QVec initialPose;
+	QVec correctPose;
 	Deque<double> xQ,yQ,yposeTQ, yposeRQ;
 	
 	TableType *tabletype;
 	
 	Mat frameColor, frameColor2;
+	
+	OsgView *osgView;
+	InnerModelViewer *innerViewer;
 };
 
 #endif

@@ -25,7 +25,7 @@ class TableObject
 	public:
 		TableObject();
 		~TableObject();
-		void setInnerModel(InnerModel *inner) { innerModel = inner; currentPose = innerModel->transform("world","vtable");};
+		void setInnerModel(InnerModel *inner) { innerModel = inner; currentPose = innerModel->transform("world","vtable_t");};
 		RoboCompRGBD::PointSeq renderPose( const QVec& newPose, const RoboCompRGBD::PointSeq& points);
 		
 	private:

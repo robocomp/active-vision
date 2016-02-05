@@ -211,6 +211,8 @@ tuple< Mat, Mat, Mat, PointSeq > SpecificWorker::renderAndGenerateImages()
 
 	const unsigned char *rgb = cam.rgb->data();
 	const float *d = (float *)cam.d->data();
+	
+	#pragma omp parallel
 	for (int i=0; i<height; ++i)
 	{
 		for (int j=0; j<width; ++j)

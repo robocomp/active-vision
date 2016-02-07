@@ -129,15 +129,19 @@ void SpecificWorker::compute()
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
 			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-			pointSeqWNoise = filterTablePoints(pointSeq, depth, true);
+			pointSeqWNoise = filterTablePoints(pointSeq, depth, false);
 			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
 			
 			// ground truth according to .xml
 			correctPose = innerModel->transform6D("world","table_t");
 			
 			// compute initial search pose
-			newPose = correctPose + getRandomOffSet();
-			localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), (2*qrand()/(float)RAND_MAX)-1, newPose.rz());
+
+			initialPose = correctPose + getInitialSample();
+			newPose = initialPose;
+			localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), newPose.ry(), newPose.rz());
+		
+			//table.setPose();
 			
 			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
 			
@@ -246,10 +250,24 @@ tuple< Mat, Mat, Mat, PointSeq > SpecificWorker::renderAndGenerateImages()
 
 QVec SpecificWorker::getRandomOffSet()
 {
-	QVec res(6); 
+
+	QVec res = QVec::zeros(6);
+	res.inject(QVec::uniformVector(3, -400, 400),0);
+	//res.inject(QVec::uniformVector(1, -0.1, 0.1),3);	
+	//res.inject(QVec::uniformVector(1, -0.5, 0.5),4);
+	//res.inject(QVec::uniformVector(1, -0.1, 0.1),5);	
+	res[1]= 0; 
+	return res;
+}
+
+QVec SpecificWorker::getInitialSample()
+{
+	QVec res = QVec::zeros(6); 
 	res.inject(QVec::uniformVector(3, -300, 300),0);
-	res.inject(QVec::uniformVector(3, -0.5, 0.5),3);
-	res[1]= 0; res[3]=0; res[5] = 0;
+//	res.inject(QVec::uniformVector(1, -0.1, 0.1),3);	
+//	res.inject(QVec::uniformVector(1, -0.5, 0.5),4);
+//	res.inject(QVec::uniformVector(1, -0.1, 0.1),5);	
+	res[1]= 0; 
 	return res;
 }
 
@@ -329,13 +347,13 @@ float SpecificWorker::distance(PointSeq orig, PointSeq dest)
 QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 {
 	static float errorAnt = std::numeric_limits< float >::max();
-	static QVec lastPose = correctPose;
+	static QVec lastPose = initialPose;
 	static float cont = 0;
 	
 	if(reset)
 	{
 		errorAnt = std::numeric_limits< float >::max();
-		lastPose = correctPose;
+		lastPose = initialPose;
 		cont = 0;
 		return QVec();
 	}
@@ -376,7 +394,7 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 	delta[4] *= factor/1000.f;
 	delta[5] *= factor/1000.f;
 	
-	cont = cont + 0.05;	
+	cont = cont + 0.01;	
 	return lastPose + delta;
 }
 
@@ -409,53 +427,7 @@ std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 	return make_tuple( Mat(), Mat(), Mat(), PointSeq());
 }
 
-void  SpecificWorker::computeHarrisCorners( const Mat &img, std::vector<cv::Point> &points)
-{
-	qDebug() << "State::HARRIS";
-	harrisdetector.detect(img);
-	harrisdetector.getCorners( points, .01);
-	qDebug() << __FUNCTION__ << "corners" << points.size();
-}
 
-std::vector<cv::Point> SpecificWorker::filterTable(const PointSeq &pointsSeq, const std::vector<cv::Point> &points)
-{
-	std::vector<cv::Point> pointsCopy;
-	for( auto p : points)
-	{
-		int index = p.y *640 + p.x;
-		QVec floorCoor = innerModel->transform("floor", QVec::vec3( pointsSeq[index].x, pointsSeq[index].y, pointsSeq[index].z), "rgbd");
-		if(  floorCoor.y() > 700 and floorCoor.y() < 780)
-				pointsCopy.push_back(p);
-	}
-	qDebug() << __FUNCTION__ << "corners" << pointsCopy.size();
-	return pointsCopy;
-	
-}
-
-Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
-{
-	// group corners
-  Mat samples( points.size(), 2, CV_32F);
-  for( uint i = 0; i < points.size(); i++ )
-	{
-		samples.at<float>(i,0) = points[i].x;
-		samples.at<float>(i,1) = points[i].y;	//Se podría meter la coor depth
-	}
-  int clusterCount = 4;
-  Mat labels;
-  int attempts = 5;
-  Mat centers;
-  cv::kmeans( samples, clusterCount, labels, cv::TermCriteria(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
-							10000, 0.0001), attempts, KMEANS_PP_CENTERS, centers );
-	Points plist;
-	for( int i = 0; i < centers.rows; i++ )
-	{
-		cv::Point p(centers.at<float>(i, 0), centers.at<float>(i, 1));
-		cv::circle(frame, p, 4, cv::Scalar(0,255,0) ,3);
-		plist.push_back(p);
-  }
-	return plist;
-}
 /////////////////
 /// GUI
 ////////////////
@@ -514,3 +486,52 @@ void SpecificWorker::startButtonSlot()
 // 			qDebug() << "State::STOP";
 // 			break;
 // 	}
+
+
+void  SpecificWorker::computeHarrisCorners( const Mat &img, std::vector<cv::Point> &points)
+{
+	qDebug() << "State::HARRIS";
+	harrisdetector.detect(img);
+	harrisdetector.getCorners( points, .01);
+	qDebug() << __FUNCTION__ << "corners" << points.size();
+}
+
+std::vector<cv::Point> SpecificWorker::filterTable(const PointSeq &pointsSeq, const std::vector<cv::Point> &points)
+{
+	std::vector<cv::Point> pointsCopy;
+	for( auto p : points)
+	{
+		int index = p.y *640 + p.x;
+		QVec floorCoor = innerModel->transform("floor", QVec::vec3( pointsSeq[index].x, pointsSeq[index].y, pointsSeq[index].z), "rgbd");
+		if(  floorCoor.y() > 700 and floorCoor.y() < 780)
+				pointsCopy.push_back(p);
+	}
+	qDebug() << __FUNCTION__ << "corners" << pointsCopy.size();
+	return pointsCopy;
+	
+}
+
+Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
+{
+	// group corners
+  Mat samples( points.size(), 2, CV_32F);
+  for( uint i = 0; i < points.size(); i++ )
+	{
+		samples.at<float>(i,0) = points[i].x;
+		samples.at<float>(i,1) = points[i].y;	//Se podría meter la coor depth
+	}
+  int clusterCount = 4;
+  Mat labels;
+  int attempts = 5;
+  Mat centers;
+  cv::kmeans( samples, clusterCount, labels, cv::TermCriteria(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
+							10000, 0.0001), attempts, KMEANS_PP_CENTERS, centers );
+	Points plist;
+	for( int i = 0; i < centers.rows; i++ )
+	{
+		cv::Point p(centers.at<float>(i, 0), centers.at<float>(i, 1));
+		cv::circle(frame, p, 4, cv::Scalar(0,255,0) ,3);
+		plist.push_back(p);
+  }
+	return plist;
+}

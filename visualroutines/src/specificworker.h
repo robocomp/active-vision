@@ -78,18 +78,15 @@ private:
 	QVec metropolis( float error, const QVec& pose, bool reset=false);
 	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, const Mat& depth, bool addNoise = false);
 	QVec getRandomOffSet();
+	QVec getInitialSample();
 	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
 	
-	
-	//QStateMachine machine;
-	
-	//enum class State {INIT, GET_IMAGE, HARRIS, STOP, FILTER_TABLE_HEIGHT, DRAW_HARRIS, RENDER_TABLE};
 	enum class State {INIT, FIT_TABLE, SENSE};
 	State state = State::INIT;
 	
 	GLViewer *viewer;
 	TableObject table;
-	QVec correctPose;
+	QVec correctPose, initialPose;
 	Deque<double> xQ,yQ,yposeTQ, yposeRQ;
 	
 	TableType *tabletype;

@@ -57,9 +57,9 @@ public:
 
 	// PRIMITIVES
 	tuple< Mat, Mat, Mat, PointSeq > getImage();
-	void  computeHarrisCorners(const Mat& img, Points &points);
-	HarrisDetector harrisdetector;
-	Points cluster(const Points &points, cv::Mat& frame);
+	//void  computeHarrisCorners(const Mat& img, Points &points);
+	//HarrisDetector harrisdetector;
+	//Points cluster(const Points &points, cv::Mat& frame);
 	std::vector<cv::Point> filterTable(const PointSeq &pointsSeq, const std::vector<cv::Point> &points);
 
 public slots:
@@ -77,7 +77,7 @@ private:
 	float distance(PointSeq, PointSeq);
 	QVec metropolis( float error, const QVec& pose, bool reset=false);
 	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, const Mat& depth, bool addNoise = false);
-	QVec getRandomOffSet();
+	QVec getSample();
 	QVec getInitialSample();
 	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
 	

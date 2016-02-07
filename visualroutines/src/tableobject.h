@@ -19,6 +19,9 @@
 #define TABLEOBJECT_H
 #include <innermodel/innermodel.h>
 #include <RGBD.h>
+#include <osgviewer/osgview.h>
+#include <innermodel/innermodelviewer.h>
+#include <opencv2/core/core.hpp>
 
 class TableObject
 {
@@ -26,12 +29,17 @@ class TableObject
 		TableObject();
 		~TableObject();
 		void setInnerModel(InnerModel *inner) { innerModel = inner; currentPose = innerModel->transform("world","vtable_t");};
-		RoboCompRGBD::PointSeq renderPose( const QVec& newPose, const RoboCompRGBD::PointSeq& points);
+		RoboCompRGBD::PointSeq renderNewPose( const QVec &newPose, InnerModelViewer *innerViewer, OsgView *osgView){};
+		void setPose(const QVec &pose){};
+		void initMetropolis(){};
+		void projectMeshOnFrame( const cv::Mat &framecolor, QWidget *label){};
 		
 	private:
 		InnerModel *innerModel;
 		QString tableName;
 		QVec currentPose;
+		
+		void filterTablePoints(){};
 		
 };
 

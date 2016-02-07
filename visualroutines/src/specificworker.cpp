@@ -23,7 +23,7 @@
 */
 SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 {
-	//initMachine();
+	this->resize(QDesktopWidget().availableGeometry(this).size() * 0.8);
 	 
 		//GLVIEWER
 	viewer = new GLViewer(glviewer);
@@ -45,10 +45,10 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 	customPlot->yAxis->setRange(0, 10000);
 	
 	customPlot->addGraph();
-	customPlot->graph(1)->setPen(QPen(Qt::green)); // line color blue for first graph
+	customPlot->graph(1)->setPen(QPen(Qt::magenta)); // line color blue for first graph
 	customPlot->graph(1)->setName("Pose Error");
 	customPlot->xAxis->setRange(0, 100);
-	customPlot->yAxis->setRange(0, 1000);
+	customPlot->yAxis->setRange(0, 500);
 	
  	for(int i=0; i<100; i++)
 		{	xQ.enqueue((double)i);yposeTQ.enqueue((double)i); yposeRQ.enqueue((double)i);}
@@ -145,8 +145,16 @@ void SpecificWorker::compute()
 			
 			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
 			
+			//sample = table.renderNewPose(innerViewer, osgView);
+			
 			sample = filterTablePoints(pointSeqR, depthR, false);			
+			
+			//sample = table.filterPoints(pointSeqR, depthR, false);
+			
 			metropolis( 0 , QVec() , true);	
+			
+			//table.initMetropolis();
+			
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
 		
 			//state = State::INIT;
@@ -156,12 +164,19 @@ void SpecificWorker::compute()
 		case State::FIT_TABLE:
  			d = distance( sample, pointSeqWNoise);	
  			newPose = metropolis( d , newPose);	
+			//newPose = table.metropolis(d);
+			
 			localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), newPose.ry(), newPose.rz() );
 			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
 			sample = filterTablePoints(pointSeqR, depthR, false);
 			
+			// sample = table.renderNewPose(newPose);
+			
 			tabletype->moveTable(newPose, "world");
 			tabletype->render( frameColor, this->label2 );			
+			
+			//table.projectMeshOnFrame( framecolor, label2);
+			
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
 			float poseErr = (correctPose - newPose).norm2();
 			yposeTQ.enqueue( poseErr );
@@ -172,6 +187,7 @@ void SpecificWorker::compute()
 	}	
 	
 	//Make 3D points move
+	viewer->resize(this->frame->width(),this->frame->height());
 	viewer->updateGL();
 
 	//Draw error signal
@@ -209,14 +225,14 @@ tuple< Mat, Mat, Mat, PointSeq > SpecificWorker::renderAndGenerateImages()
 		pointSeq.resize ( width*height );
 	}
 	
-	RTMat rt = innerModel->getTransformationMatrix("root", "rgbd");
+	RTMat rt = localInnerModel->getTransformationMatrix("root", "rgbd");
 	innerViewer->cameras["rgbd"].viewerCamera->getCameraManipulator()->setByMatrix(QMatToOSGMat4(rt));
 	cam.viewerCamera->getCamera()->getProjectionMatrixAsPerspective(fovy, aspectRatio, Zn, Zf);
 
 	const unsigned char *rgb = cam.rgb->data();
 	const float *d = (float *)cam.d->data();
 	
-	#pragma omp parallel
+//	#pragma omp parallel
 	for (int i=0; i<height; ++i)
 	{
 		for (int j=0; j<width; ++j)
@@ -248,7 +264,7 @@ tuple< Mat, Mat, Mat, PointSeq > SpecificWorker::renderAndGenerateImages()
 	return std::make_tuple(frame, greyMat, depth_norm_scaled, pointSeq);	
 }
 
-QVec SpecificWorker::getRandomOffSet()
+QVec SpecificWorker::getSample()
 {
 
 	QVec res = QVec::zeros(6);
@@ -284,7 +300,7 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, const Mat &de
   cv::Canny( depth, depthF, lowThreshold, lowThreshold*ratio, kernel_size );
 	cv::Size size = depth.size();
 	
-	qDebug() << __FUNCTION__ << "points" << points.size() << size.width << size.height;
+	//qDebug() << __FUNCTION__ << "points" << points.size() << size.width << size.height;
 	
 	for (int i=0; i< size.height; i+=4) 
 	{
@@ -386,7 +402,7 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 	double factor = exp(-cont);
 	//QVec delta = QVec::uniformVector(3, -300*factor, 300*factor);
 	//QVec delta = getRandomOffSet()*(float)factor;
-	QVec delta = getRandomOffSet();
+	QVec delta = getSample();
 	delta[0] *= factor;
 	delta[1] *= factor;
 	delta[2] *= factor;
@@ -434,7 +450,7 @@ std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 
 void SpecificWorker::resetButtonSlot()
 {
-	state = State::INIT;
+	state = State::SENSE;
 }
 
 void SpecificWorker::startButtonSlot()
@@ -488,50 +504,54 @@ void SpecificWorker::startButtonSlot()
 // 	}
 
 
-void  SpecificWorker::computeHarrisCorners( const Mat &img, std::vector<cv::Point> &points)
-{
-	qDebug() << "State::HARRIS";
-	harrisdetector.detect(img);
-	harrisdetector.getCorners( points, .01);
-	qDebug() << __FUNCTION__ << "corners" << points.size();
-}
 
-std::vector<cv::Point> SpecificWorker::filterTable(const PointSeq &pointsSeq, const std::vector<cv::Point> &points)
-{
-	std::vector<cv::Point> pointsCopy;
-	for( auto p : points)
-	{
-		int index = p.y *640 + p.x;
-		QVec floorCoor = innerModel->transform("floor", QVec::vec3( pointsSeq[index].x, pointsSeq[index].y, pointsSeq[index].z), "rgbd");
-		if(  floorCoor.y() > 700 and floorCoor.y() < 780)
-				pointsCopy.push_back(p);
-	}
-	qDebug() << __FUNCTION__ << "corners" << pointsCopy.size();
-	return pointsCopy;
-	
-}
 
-Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
-{
-	// group corners
-  Mat samples( points.size(), 2, CV_32F);
-  for( uint i = 0; i < points.size(); i++ )
-	{
-		samples.at<float>(i,0) = points[i].x;
-		samples.at<float>(i,1) = points[i].y;	//Se podría meter la coor depth
-	}
-  int clusterCount = 4;
-  Mat labels;
-  int attempts = 5;
-  Mat centers;
-  cv::kmeans( samples, clusterCount, labels, cv::TermCriteria(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
-							10000, 0.0001), attempts, KMEANS_PP_CENTERS, centers );
-	Points plist;
-	for( int i = 0; i < centers.rows; i++ )
-	{
-		cv::Point p(centers.at<float>(i, 0), centers.at<float>(i, 1));
-		cv::circle(frame, p, 4, cv::Scalar(0,255,0) ,3);
-		plist.push_back(p);
-  }
-	return plist;
-}
+
+// void  SpecificWorker::computeHarrisCorners( const Mat &img, std::vector<cv::Point> &points)
+// {
+// 	qDebug() << "State::HARRIS";
+// 	harrisdetector.detect(img);
+// 	harrisdetector.getCorners( points, .01);
+// 	qDebug() << __FUNCTION__ << "corners" << points.size();
+// }
+// 
+// std::vector<cv::Point> SpecificWorker::filterTable(const PointSeq &pointsSeq, const std::vector<cv::Point> &points)
+// {
+// 	std::vector<cv::Point> pointsCopy;
+// 	for( auto p : points)
+// 	{
+// 		int index = p.y *640 + p.x;
+// 		QVec floorCoor = innerModel->transform("floor", QVec::vec3( pointsSeq[index].x, pointsSeq[index].y, pointsSeq[index].z), "rgbd");
+// 		if(  floorCoor.y() > 700 and floorCoor.y() < 780)
+// 				pointsCopy.push_back(p);
+// 	}
+// 	qDebug() << __FUNCTION__ << "corners" << pointsCopy.size();
+// 	return pointsCopy;
+// 	
+// }
+// 
+// Points SpecificWorker::cluster(const Points &points, cv::Mat& frame)
+// {
+// 	// group corners
+//   Mat samples( points.size(), 2, CV_32F);
+//   for( uint i = 0; i < points.size(); i++ )
+// 	{
+// 		samples.at<float>(i,0) = points[i].x;
+// 		samples.at<float>(i,1) = points[i].y;	//Se podría meter la coor depth
+// 	}
+//   int clusterCount = 4;
+//   Mat labels;
+//   int attempts = 5;
+//   Mat centers;
+//   cv::kmeans( samples, clusterCount, labels, cv::TermCriteria(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
+// 							10000, 0.0001), attempts, KMEANS_PP_CENTERS, centers );
+// 	Points plist;
+// 	for( int i = 0; i < centers.rows; i++ )
+// 	{
+// 		cv::Point p(centers.at<float>(i, 0), centers.at<float>(i, 1));
+// 		cv::circle(frame, p, 4, cv::Scalar(0,255,0) ,3);
+// 		plist.push_back(p);
+//   }
+// 	return plist;
+// }
+

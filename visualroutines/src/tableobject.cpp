@@ -26,26 +26,4 @@ TableObject::~TableObject()
 {
 }
 
-RoboCompRGBD::PointSeq TableObject::renderPose(const QVec& newPose, const RoboCompRGBD::PointSeq &points)
-{
-	RoboCompRGBD::PointSeq pSeq;
-	
-	//move the table to pose
-	//innerModel->updateTranslationValues(tableName, pose.x(), pose.y(), pose.z());
-	
-	QVec delta = newPose - currentPose;
-	RoboCompRGBD::PointXYZ pw;
-	for (auto p: points)
-	{
-		pw = {p.x + delta.x(), p.y+ delta.y(), p.z + delta.z(), 0};
-		pSeq.push_back( pw );
-	}
-	currentPose = newPose;
-	//update InnerModelViewer
-	
-	//get RGBD frame
-	
-	//return pSeq
-	
-	return pSeq;
-}
+

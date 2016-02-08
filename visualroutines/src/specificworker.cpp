@@ -23,7 +23,7 @@
 */
 SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 {
-	this->resize(QDesktopWidget().availableGeometry(this).size() * 0.8);
+	this->resize(QDesktopWidget().availableGeometry(this).size() * 0.6);
 	 
 		//GLVIEWER
 	viewer = new GLViewer(glviewer);
@@ -136,28 +136,27 @@ void SpecificWorker::compute()
 			correctPose = innerModel->transform6D("world","table_t");
 			
 			// compute initial search pose
-
 			initialPose = correctPose + getInitialSample();
 			newPose = initialPose;
-			localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), newPose.ry(), newPose.rz());
-		
-			//table.setPose();
+			//localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), newPose.ry(), newPose.rz());
+			table.setPose( initialPose );
 			
+			// render model
 			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
 			
-			//sample = table.renderNewPose(innerViewer, osgView);
+			// filter points not belonging to the table
+			//sample = filterTablePoints(pointSeqR, depthR, false);			
+			sample = table.filterTablePoints(pointSeqR, depthR, false);
 			
-			sample = filterTablePoints(pointSeqR, depthR, false);			
-			
-			//sample = table.filterPoints(pointSeqR, depthR, false);
-			
+			//Initialize metropolis
 			metropolis( 0 , QVec() , true);	
-			
 			//table.initMetropolis();
 			
+			//copy model point cloud to the viewer
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
 		
 			//state = State::INIT;
+			qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size();
 			state = State::FIT_TABLE;
 			break;
 			
@@ -166,11 +165,13 @@ void SpecificWorker::compute()
  			newPose = metropolis( d , newPose);	
 			//newPose = table.metropolis(d);
 			
-			localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), newPose.ry(), newPose.rz() );
-			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
-			sample = filterTablePoints(pointSeqR, depthR, false);
+			table.setPose( newPose );
+			//localInnerModel->updateTransformValues("vtable_t", newPose.x(), newPose.y(), newPose.z(), newPose.rx(), newPose.ry(), newPose.rz() );
 			
-			// sample = table.renderNewPose(newPose);
+			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
+			
+			//sample = filterTablePoints(pointSeqR, depthR, false);
+			sample = table.filterTablePoints(pointSeqR, depthR, false);
 			
 			tabletype->moveTable(newPose, "world");
 			tabletype->render( frameColor, this->label2 );			
@@ -182,7 +183,7 @@ void SpecificWorker::compute()
 			yposeTQ.enqueue( poseErr );
 			yQ.enqueue(d/1000); 
 			lcdNumber->display(poseErr);
-			qDebug() << __FUNCTION__ << "cloud distance: "<< d << "pose distance:" << poseErr << "sample size:" << sample.size() << "real size:" << pointSeqWNoise.size();
+			//qDebug() << __FUNCTION__ << "cloud distance: "<< d << "pose distance:" << poseErr << "sample size:" << sample.size() << "real size:" << pointSeqWNoise.size();
 			break;
 	}	
 	
@@ -268,9 +269,9 @@ QVec SpecificWorker::getSample()
 {
 
 	QVec res = QVec::zeros(6);
-	res.inject(QVec::uniformVector(3, -400, 400),0);
+	res.inject(QVec::uniformVector(3, -250, 250),0);
 	//res.inject(QVec::uniformVector(1, -0.1, 0.1),3);	
-	//res.inject(QVec::uniformVector(1, -0.5, 0.5),4);
+	res.inject(QVec::uniformVector(1, -0.2, 0.2),4);
 	//res.inject(QVec::uniformVector(1, -0.1, 0.1),5);	
 	res[1]= 0; 
 	return res;
@@ -279,9 +280,9 @@ QVec SpecificWorker::getSample()
 QVec SpecificWorker::getInitialSample()
 {
 	QVec res = QVec::zeros(6); 
-	res.inject(QVec::uniformVector(3, -300, 300),0);
+	res.inject(QVec::uniformVector(3, -350, 350),0);
 //	res.inject(QVec::uniformVector(1, -0.1, 0.1),3);	
-//	res.inject(QVec::uniformVector(1, -0.5, 0.5),4);
+	 res.inject(QVec::uniformVector(1, -0.4, 0.4),4);
 //	res.inject(QVec::uniformVector(1, -0.1, 0.1),5);	
 	res[1]= 0; 
 	return res;
@@ -323,7 +324,7 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, const Mat &de
 			}
 		}
 	}
-	qDebug() << __FUNCTION__ << lp.size();
+	//qDebug() << __FUNCTION__ << lp.size();
 	
   //imshow( "canny", depth );
 	return lp;
@@ -374,12 +375,14 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 		return QVec();
 	}
 	
-	double p = exp(-error/1000);
-	double pAnt = exp(-errorAnt/1000);
 	
-	double ratio = p/pAnt;
-	//qDebug() << __FUNCTION__ << "ratio" << ratio <<p << pAnt;
-	if( ratio >= 1 )
+// 	double p = exp(-error/1000);
+// 	double pAnt = exp(-errorAnt/1000);
+// 	
+// 	double ratio = p/pAnt;
+// 	qDebug() << __FUNCTION__ << "ratio" << ratio << "p" << p << "pant" << pAnt << "error" << error << "errorAnt" << errorAnt;
+	
+	if( error < errorAnt  )
 	{
 		errorAnt = error;
 		lastPose = pose;
@@ -387,12 +390,12 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 	}
 	else
 	{	
-		double draw = (double)qrand()/RAND_MAX;
-		if( draw < ratio )
-		{
-			errorAnt = error;
-			lastPose = pose;
-			//qDebug() << __FUNCTION__ << "accetp with draw > ratio" << draw;
+ 		double draw = (double)qrand()/RAND_MAX;
+ 		if( draw < 0.2 )
+ 		{
+ 			errorAnt = error;
+ 			lastPose = pose;
+			qDebug() << __FUNCTION__ << "accetp with draw > ratio" << draw;
 		}
 		//else
 			//qDebug() << __FUNCTION__ << "reject";
@@ -407,10 +410,10 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 	delta[1] *= factor;
 	delta[2] *= factor;
 	delta[3] *= factor/1000.f;
-	delta[4] *= factor/1000.f;
+	delta[4] *= factor/700.f;
 	delta[5] *= factor/1000.f;
 	
-	cont = cont + 0.01;	
+	cont = cont + 0.02;	
 	return lastPose + delta;
 }
 

@@ -5,7 +5,7 @@ CommonBehavior.Endpoints=tcp -p 11000
 DifferentialRobotProxy = differentialrobot:tcp -h localhost -p 10004
 RGBDProxy = rgbd:tcp -h localhost -p 10096
 
-VisualRoutines.InnerModel=/home/robocomp/robocomp/files/innermodel/activevision.xml
+VisualRoutines.InnerModel=etc/activevision.xml
 
 Ice.Warn.Connections=0
 Ice.Trace.Network=0

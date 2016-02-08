@@ -216,7 +216,7 @@ std::tuple<int, int> TableType::selectFirstCorner(const QPoints &clusters3D)
 
 void TableType::render(const cv::Mat& frame, QLabel *label)
 {	
-	qDebug() << __FUNCTION__ ;
+	//qDebug() << __FUNCTION__ ;
 	std::vector< std::vector < cv::Point> > lines;
 	tabletop->render(lines);
 	
@@ -228,7 +228,7 @@ void TableType::render(const cv::Mat& frame, QLabel *label)
 	cv::polylines(m, lines, false, cv::Scalar(0,0,200));
 
  	QImage img(m.data, m.cols, m.rows, QImage::Format_RGB888);
- 	label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-	//label->setPixmap(QPixmap::fromImage(img));
+ 	//label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
+	label->setPixmap(QPixmap::fromImage(img));
 }
 

@@ -22,6 +22,9 @@
 #include <osgviewer/osgview.h>
 #include <innermodel/innermodelviewer.h>
 #include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
+using namespace cv;
 
 class TableObject
 {
@@ -29,10 +32,11 @@ class TableObject
 		TableObject();
 		~TableObject();
 		void setInnerModel(InnerModel *inner) { innerModel = inner; currentPose = innerModel->transform("world","vtable_t");};
-		RoboCompRGBD::PointSeq renderNewPose( const QVec &newPose, InnerModelViewer *innerViewer, OsgView *osgView){};
-		void setPose(const QVec &pose){};
+		void setPose(const QVec &pose);
 		void initMetropolis(){};
 		void projectMeshOnFrame( const cv::Mat &framecolor, QWidget *label){};
+		RoboCompRGBD::PointSeq filterTablePoints(const RoboCompRGBD::PointSeq &points, const Mat &depth, bool addNoise);
+
 		
 	private:
 		InnerModel *innerModel;

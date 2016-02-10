@@ -32,6 +32,14 @@ void TableObject::setPose(const QVec& pose)
 	innerModel->updateTransformValues("vtable_t", pose.x(), pose.y(), pose.z(), pose.rx(), pose.ry(), pose.rz());
 }
 
+/**
+ * @brief Filters the points cloud as belonging to a table
+ * 
+ * @param points point cloud to filter
+ * @param depth depth image
+ * @param addNoise whether to add noise to the filtered cloud
+ * @return RoboCompRGBD::PointSeq cloud returned after filtering
+ */
 RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointSeq &points, const Mat &depth, bool addNoise)
 {
 	RoboCompRGBD::PointSeq lp;
@@ -39,7 +47,6 @@ RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointS
 	int ratio = 3;
 	int kernel_size = 5;
 	
-	// filter depthimage
 	Mat depthF;
   Canny( depth, depthF, lowThreshold, lowThreshold*ratio, kernel_size );
 	Size size = depth.size();
@@ -73,3 +80,36 @@ RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointS
 	return lp;
 }
 
+/**
+ * @brief Factor is the cooling parameter
+ * 
+ * @param factor ...
+ * @return RMat::QVec
+ */
+QVec TableObject::getSample(double factor)
+{
+	static unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+  static std::default_random_engine generator (seed);
+  
+	std::normal_distribution<float> distribution(0.0, 150.0*factor);
+	
+	QVec res = QVec::zeros(6);
+	res[0] = distribution(generator);
+	res[2] = distribution(generator);
+	
+	
+	qDebug() << res << factor;
+	return res;
+}
+
+QVec TableObject::getInitialPose()
+{
+	QVec res = QVec::zeros(6); 
+	res.inject(QVec::uniformVector(3, -250, 250),0);
+//	res.inject(QVec::uniformVector(1, -0.1, 0.1),3);	
+//	res.inject(QVec::uniformVector(1, -0.4, 0.4),4);
+//	res.inject(QVec::uniformVector(1, -0.1, 0.1),5);	
+	
+	res[1]= 0; 
+	return res;
+}

@@ -23,6 +23,8 @@
 #include <innermodel/innermodelviewer.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <chrono>
+#include <random>
 
 using namespace cv;
 
@@ -36,7 +38,8 @@ class TableObject
 		void initMetropolis(){};
 		void projectMeshOnFrame( const cv::Mat &framecolor, QWidget *label){};
 		RoboCompRGBD::PointSeq filterTablePoints(const RoboCompRGBD::PointSeq &points, const Mat &depth, bool addNoise);
-
+		QVec getSample(double factor=0.0);
+		QVec getInitialPose();
 		
 	private:
 		InnerModel *innerModel;

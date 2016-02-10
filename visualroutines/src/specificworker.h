@@ -42,6 +42,8 @@
 #include <osgviewer/osgview.h>
 #include <innermodel/innermodelviewer.h>
 #include <omp.h>
+#include <random>
+#include <chrono>
 
 using namespace cv;
 typedef std::vector<cv::Point> Points;
@@ -95,6 +97,9 @@ private:
 	
 	OsgView *osgView;
 	InnerModelViewer *innerViewer;
+	
+	
+
 };
 
 #endif

@@ -45,16 +45,6 @@ TableType::~TableType()
 {
 }
 
-/**
- * @brief Create a new sample of the table and compute a set of 3D points along its mesh
- * 
- * @return RoboCompRGBD::PointSeq
- */
-PointSeq TableType::newSample()
-{
-
-}
-
 void TableType::update(SpecificWorker *handler)
 {
 // 	static Mat gray, depth, frame;

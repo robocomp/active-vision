@@ -146,16 +146,17 @@ void SpecificWorker::compute()
 			
 			// filter points not belonging to the table
 			sample = table.filterTablePoints(pointSeqR, depthR, false);
-			
+	
 			//Initialize metropolis
 			metropolis( 0 , QVec() , true);	
 			//table.initMetropolis();
 			
 			//copy model point cloud to the viewer
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
+
+			qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size() << pointSeqR.size();
 		
-			qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size();
-			state = State::FIT_TABLE;
+		state = State::FIT_TABLE;
 			break;
 			
 		case State::FIT_TABLE:
@@ -392,7 +393,7 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 	}
 	else
 	{	
-		qDebug() << __FUNCTION__<< errorAnt - error << "factor " << errorAnt / error << "ratio acc" << (float)acc/reps;
+		//qDebug() << __FUNCTION__<< errorAnt - error << "factor " << errorAnt / error << "ratio acc" << (float)acc/reps;
  		double draw = (double)qrand()/RAND_MAX;
  		if( draw < 0.2 )
  		{

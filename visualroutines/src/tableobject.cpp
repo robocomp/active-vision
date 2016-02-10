@@ -43,8 +43,9 @@ void TableObject::setPose(const QVec& pose)
 RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointSeq &points, const Mat &depth, bool addNoise)
 {
 	RoboCompRGBD::PointSeq lp;
-	int lowThreshold=50;
-	int ratio = 3;
+	int lowThreshold=10;
+	int highThreshold = 200;
+	int ratio = 20;
 	int kernel_size = 5;
 	
 	Mat depthF;
@@ -98,7 +99,7 @@ QVec TableObject::getSample(double factor)
 	res[2] = distribution(generator);
 	
 	
-	qDebug() << res << factor;
+	//qDebug() << res << factor;
 	return res;
 }
 

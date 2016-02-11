@@ -74,13 +74,15 @@ public slots:
 private:
 	InnerModel *innerModel, *localInnerModel;
 	
-// 	Mat canny(const Mat &img);
-// 	Mat hough(const Mat &img);
 	void initMachine();
 	double distance(PointSeq orig, PointSeq dest);
-	QVec metropolis( double error, const QVec& pose, bool reset = false);
+	tuple< QVec, double > metropolis( double error, const QVec& pose, bool reset = false);
 	QVec getInitialSample();
 	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
+	tuple< double, double, double > experiment();
+	tuple<double, double> mapError(const QVec &newPose, const PointSeq &groundTruth, const QVec &correctPose);
+	tuple< QVec, PointSeq>  initMapError();
+
 	
 	enum class State {INIT, FIT_TABLE, SENSE};
 	State state = State::INIT;

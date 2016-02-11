@@ -67,6 +67,7 @@ public:
 
 public slots:
 	void compute(); 	
+	void compute2();
 	void resetButtonSlot();
 	void startButtonSlot();
 	

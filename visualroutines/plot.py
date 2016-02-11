@@ -13,18 +13,17 @@ fig = plt.figure(figsize=plt.figaspect(0.5))
 ax = fig.gca(projection='3d')
 #read file
 data = np.genfromtxt('out.txt')
-x = data[:,0]
-y = data[:,1]
-e1 = data[:,2]
-e2 = data[:,3]
-
+x = data[200:,0]
+y = data[200:,1]
+e1 = data[200:,2]
+e2 = data[200:,3]
 
 xi = np.linspace(min(x), max(x))
 yi = np.linspace(min(y), max(y))
 
 X, Y = np.meshgrid(xi, yi)
 
-e1=e2
+
 
 e1 = e1/max(e1)
 

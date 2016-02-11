@@ -128,7 +128,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	return true;
 }
 
-void SpecificWorker::compute()
+void SpecificWorker::compute2()
 {
 	static bool firstTime=true;
 	static QVec correctPose;
@@ -168,23 +168,28 @@ void SpecificWorker::compute()
 	}
 }
 
-// void SpecificWorker::compute()
-// {
-// 		double poseError, error, factor;
-// 		static int iter=0;
-// 		tie(poseError, error, factor) = experiment();
-// 		const double poseThreshold = 0.1;
-// 		const int maxIter = 5000;
-// 		iter++;
-// 		
-// 		if( poseError < poseThreshold or factor < 0.001 )
+void SpecificWorker::compute()
+{
+		double poseError, error, factor;
+		static int iter=0;
+		const double poseThreshold = 15;
+		const int maxIter = 1000;
+		
+		tie(poseError, error, factor) = experiment();
+		iter++;
+		
+// 		if( state == State::FIT_TABLE and (error < poseThreshold or factor < 0.001) )
 // 		{ 
-// 			qDebug() << "finished in " << iter << "iteraciones";
+// 			qDebug() << "Exp. finished in " << iter << "iteraciones" << "error" << poseError << "factor" << factor;
+// 			state = State::SENSE;
 // 		}
 // 		else if( iter > maxIter)
-// 			qFatal("Aborting, too many iterations");
-// 			
-// }
+// 		{
+// 			qDebug() << "Exp. aborted";
+// 			state = State::SENSE;
+// 		}
+			
+}
 
 tuple< double, double, double> SpecificWorker::experiment()
 {
@@ -209,7 +214,7 @@ tuple< double, double, double> SpecificWorker::experiment()
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
 			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-			pointSeqWNoise = table.filterTablePoints(pointSeq, depth, false);
+			pointSeqWNoise = table.filterTablePoints(pointSeq, depth, true);
 			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
 			
 			// ground truth according to .xml
@@ -473,7 +478,7 @@ tuple< QVec, double> SpecificWorker::metropolis(double error, const QVec &pose, 
 	else
 	{	
  		double draw = (double)qrand()/RAND_MAX;
- 		if( draw >= fabs(error/errorAnt)/2.0 )
+ 		if( draw >= fabs(error/errorAnt)/3.5 )
  		{
 			qDebug() << __FUNCTION__ << "ACCEPT 2 with draw > fixed ratio" << draw << "ratio" << errorAnt/error << "errsA" << errorAnt << "err" << error;
  			errorAnt = error;

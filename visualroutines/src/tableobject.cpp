@@ -45,7 +45,7 @@ RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointS
 	RoboCompRGBD::PointSeq lp;
 	int lowThreshold=10;
 	int highThreshold = 200;
-	int ratio = 20;
+	int ratio = 3;
 	int kernel_size = 5;
 	
 	Mat depthF;

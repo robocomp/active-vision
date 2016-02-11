@@ -54,6 +54,26 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
  	for(int i=0; i<100; i++)
 		{	xQ.enqueue((double)i);yposeTQ.enqueue((double)i); yposeRQ.enqueue((double)i);}
 	
+	
+	 /////////////////////////////////////////////
+   ///             FSPF
+   ////////////////////////////////////////////
+  PlaneFilter::PlaneFilterParams filterParams;
+	filterParams.maxPoints = 2000;
+	filterParams.numSamples = 20000;
+	filterParams.numLocalSamples = 80;
+	filterParams.planeSize = 100;
+	filterParams.WorldPlaneSize = 50;
+	filterParams.minInlierFraction = 0.8;
+	filterParams.maxError = 20;
+	filterParams.numRetries = 2;
+	filterParams.maxDepthDiff = 1800;
+	// Parameters for polygonization
+	filterParams.runPolygonization = false;
+	filterParams.minConditionNumber = 0.1;
+	filterParams.filterOutliers = true;
+	planeFilter = new PlaneFilter( filterParams);
+	
 	connect(resetButton, SIGNAL(clicked()), this, SLOT(resetButtonSlot()));
 	connect(startButton, SIGNAL(clicked()), this, SLOT(startButtonSlot()));
 }
@@ -130,7 +150,7 @@ void SpecificWorker::compute()
 			std::tie(frame, gray, depth, pointSeq) = this->getImage();
 			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-			pointSeqWNoise = filterTablePoints(pointSeq, depth, false);
+			pointSeqWNoise = table.filterTablePoints(pointSeq, depth, false);
 			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
 			
 			// ground truth according to .xml
@@ -160,8 +180,12 @@ void SpecificWorker::compute()
 			break;
 			
 		case State::FIT_TABLE:
+			
+			float poseErr = (correctPose - newPose).norm2();
+			
 			//compute distance between clouds
  			d = distance( sample, pointSeqWNoise);	
+			if( d==0 ) break;
 			
  			newPose = metropolis( d , newPose);	
 			//newPose = table.metropolis(d);
@@ -178,7 +202,7 @@ void SpecificWorker::compute()
 			//table.projectMeshOnFrame( framecolor, label2);
 			
 			viewer->setCloud(sample, QVec::vec3(0,1,0));
-			float poseErr = (correctPose - newPose).norm2();
+			
 			yposeTQ.enqueue( poseErr );
 			yQ.enqueue(d/1000); 
 			lcdNumber->display(poseErr);
@@ -264,24 +288,11 @@ tuple< Mat, Mat, Mat, PointSeq > SpecificWorker::renderAndGenerateImages()
 	return std::make_tuple(frame, greyMat, depth_norm_scaled, pointSeq);	
 }
 
-QVec SpecificWorker::getSample()
-{
-	static unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  static std::default_random_engine generator (seed);
-  static std::normal_distribution<float> distribution(0.0, 200.0);
-	
-	QVec res = QVec::zeros(6);
-	res[0] = distribution(generator);
-	res[2] = distribution(generator);
-	
-	qDebug() << res;
-	return res;
-}
 
 QVec SpecificWorker::getInitialSample()
 {
 	QVec res = QVec::zeros(6); 
-	res.inject(QVec::uniformVector(3, -350, 350),0);
+	res.inject(QVec::uniformVector(3, -150, 150),0);
 //	res.inject(QVec::uniformVector(1, -0.1, 0.1),3);	
 //	res.inject(QVec::uniformVector(1, -0.4, 0.4),4);
 //	res.inject(QVec::uniformVector(1, -0.1, 0.1),5);	
@@ -290,46 +301,6 @@ QVec SpecificWorker::getInitialSample()
 }
 
 
-PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, const Mat &depth, bool addNoise)
-{
-	PointSeq lp;
-	int lowThreshold=50;
-	int ratio = 3;
-	int kernel_size = 5;
-	
-	// filter depthimage
-	Mat depthF;
-  cv::Canny( depth, depthF, lowThreshold, lowThreshold*ratio, kernel_size );
-	cv::Size size = depth.size();
-	
-	//qDebug() << __FUNCTION__ << "points" << points.size() << size.width << size.height;
-	
-	for (int i=0; i< size.height; i+=4) 
-	{
-		for (int j=0; j< size.width; j+=4) 
-		{
-			//qDebug() << __FUNCTION__ << depth.at<uchar>(i,j) << depthF.at<uchar>(i,j);
-			if( depthF.at<uchar>(i,j) > 0 )
-			{
-				PointXYZ p = points[j+i*size.width];
-				QVec pw = innerModel->transform("world", QVec::vec3(p.x,p.y,p.z),"rgbd"); 			
-				//GET convez hull from innermodel!!!
-				if( pw.y()>100 and pw.z()<1000 )
-				{
-					if( addNoise) 
-						pw = pw + QVec::uniformVector(3, -30, 30);
-					
-					PointXYZ pn = { pw.x(),pw.y(),pw.z(),0 };
-					lp.push_back(pn);
-				}
-			}
-		}
-	}
-	//qDebug() << __FUNCTION__ << lp.size();
-	
-  //imshow( "canny", depth );
-	return lp;
-}
 
 /**
  * @brief Computes the sum of the minimum distances between the clouds
@@ -339,35 +310,38 @@ PointSeq SpecificWorker::filterTablePoints(const PointSeq &points, const Mat &de
  * @return float
  */
 
-float SpecificWorker::distance(PointSeq orig, PointSeq dest)
+double SpecificWorker::distance(PointSeq orig, PointSeq dest)
 {
 	double sum=0;
-	//float d;
 	
 	#pragma omp parallel
 	for( uint i=0; i<orig.size(); i++ )
 	{
 		float minDist = std::numeric_limits< float >::max();
 		float d;
+		int jIndex;
 		for( uint j=0; j< dest.size(); j++ )
 		{
 				PointXYZ &p = orig[i];
 				PointXYZ &q = dest[j];
 				d = ((p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y) + (p.z-q.z)*(p.z-q.z));
 				if( d < minDist )
+				{
 					minDist = d;
+					jIndex = j;
+				}
 		}
 		sum += minDist;
-	}
+	}	
 	return sum;
 }
 
-QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
+QVec SpecificWorker::metropolis(double error, const QVec &pose, bool reset)
 {
 	static float errorAnt = std::numeric_limits< float >::max();
 	static QVec lastPose = initialPose;
 	static float cont = 0;
-	static int reps=0, acc=0;
+	static float reps=0, acc=0;
 	
 	if(reset)
 	{
@@ -376,34 +350,32 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 		cont = 0;
 		return QVec();
 	}
-	
-	
 // 	double p = exp(-error/1000);
 // 	double pAnt = exp(-errorAnt/1000);
 // 	
 // 	double ratio = p/pAnt;
 // 	qDebug() << __FUNCTION__ << "ratio" << ratio << "p" << p << "pant" << pAnt << "error" << error << "errorAnt" << errorAnt;
 	
-	if( error <= errorAnt  )
+
+	if( errorAnt-error > 1 )
 	{
+		qDebug() <<	 "ACCEPT one, err diff" << errorAnt - error << "ratio" << errorAnt/error << "errsA" << errorAnt << "err" << error;
 		errorAnt = error;
 		lastPose = pose;
-		acc++;
-		//qDebug() << __FUNCTION__ << "accetp";
 	}
 	else
 	{	
-		//qDebug() << __FUNCTION__<< errorAnt - error << "factor " << errorAnt / error << "ratio acc" << (float)acc/reps;
  		double draw = (double)qrand()/RAND_MAX;
- 		if( draw < 0.2 )
+ 		if( draw >= fabs(error/errorAnt)/2.0 )
  		{
+			qDebug() << __FUNCTION__ << "ACCEPT 2 with draw > fixed ratio" << draw << "ratio" << errorAnt/error << "errsA" << errorAnt << "err" << error;
  			errorAnt = error;
  			lastPose = pose;
-			acc++;
-			qDebug() << __FUNCTION__ << "accetp with draw > ratio" << draw;
+			acc+=1;
+			
 		}
-		//else
-			//qDebug() << __FUNCTION__ << "reject";
+// 		else
+// 			qDebug() << __FUNCTION__ << "reject";
 	}
 	
 	// draw a new pose with cooling policy
@@ -412,16 +384,12 @@ QVec SpecificWorker::metropolis(float error, const QVec &pose, bool reset)
 	//QVec delta = getRandomOffSet()*(float)factor;
 	
 	QVec delta = table.getSample(factor);
-	
-// 	delta[0] *= factor;
-// 	delta[1] *= factor;
-// 	delta[2] *= factor;
-// 	delta[3] *= factor/1000.f;
-// 	delta[4] *= factor/700.f;
-// 	delta[5] *= factor/1000.f;
-	
+		
 	cont = cont + 0.02;	
-	reps++;
+	reps+=1;
+	double acratio = acc/reps*100.0;
+	if (acratio>0) 
+		qDebug() << __FUNCTION__ << "ratio percentage:" << (int)acratio << "%";
 	return lastPose + delta;
 }
 

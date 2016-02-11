@@ -44,6 +44,7 @@
 #include <omp.h>
 #include <random>
 #include <chrono>
+#include "fspf/plane_filtering.h"
 
 using namespace cv;
 typedef std::vector<cv::Point> Points;
@@ -76,10 +77,8 @@ private:
 // 	Mat canny(const Mat &img);
 // 	Mat hough(const Mat &img);
 	void initMachine();
-	float distance(PointSeq, PointSeq);
-	QVec metropolis( float error, const QVec& pose, bool reset=false);
-	RoboCompRGBD::PointSeq filterTablePoints(const PointSeq& points, const Mat& depth, bool addNoise = false);
-	QVec getSample();
+	double distance(PointSeq orig, PointSeq dest);
+	QVec metropolis( double error, const QVec& pose, bool reset = false);
 	QVec getInitialSample();
 	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
 	
@@ -98,7 +97,8 @@ private:
 	OsgView *osgView;
 	InnerModelViewer *innerViewer;
 	
-	
+	//fspf
+	PlaneFilter *planeFilter;
 
 };
 

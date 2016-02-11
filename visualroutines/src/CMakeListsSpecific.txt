@@ -11,6 +11,10 @@ SET ( SOURCES
   tableobject.cpp
   glviewer.cpp
   qcustomplot.cpp
+  fspf/plane_filtering.cpp
+  fspf/grahams_scan.cpp
+  fspf/gvector.cpp
+  fspf/plane_polygon.cpp
 )
 
 # Headers set
@@ -26,5 +30,5 @@ INCLUDE($ENV{ROBOCOMP}/cmake/modules/ipp.cmake)
 
 SET ( SPECIFIC_LIBS OpenMeshCore QGLViewer glut GL -fopenmp)
 
-ADD_DEFINITIONS( -std=c++11 -fopenmp)
+ADD_DEFINITIONS( -std=c++11 -fopenmp  -msse4.1)
 

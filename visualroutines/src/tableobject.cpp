@@ -98,7 +98,6 @@ QVec TableObject::getSample(double factor)
 	res[0] = distribution(generator);
 	res[2] = distribution(generator);
 	
-	
 	//qDebug() << res << factor;
 	return res;
 }

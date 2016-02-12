@@ -44,6 +44,7 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 	customPlot->graph(0)->setName("Fit Error");
 	customPlot->xAxis->setRange(0, 100);
 	customPlot->yAxis->setRange(0, 10000);
+	customPlot->yAxis->rescale(true) ;
 	
 	customPlot->addGraph();
 	customPlot->graph(1)->setPen(QPen(Qt::magenta)); // line color blue for first graph
@@ -95,8 +96,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 		
 		RoboCompCommonBehavior::Parameter par = params.at("VisualRoutines.InnerModel");
 		qDebug() << QString::fromStdString(par.value);
-		
-		
+				
 		if( QFile::exists(QString::fromStdString(par.value)) )
 		{
 			innerModel = new InnerModel(par.value);
@@ -144,7 +144,7 @@ void SpecificWorker::compute2()
 		out.setDevice(&file);
 		tie(correctPose, groundTruth) = initMapError();
 		for(float i=-300; i< 300; i+=10)
-			for (float j = -300 ; j < 300; j+=10) 
+			for (float j = -100 ; j < 300; j+=10) 
 				lista.append( QVec::vec6( i,0.,j,0.,0.,0.) );
 		qDebug() << __FUNCTION__ << "lista creada" << lista.size();
 		tie(correctPose, groundTruth) = initMapError();
@@ -170,109 +170,120 @@ void SpecificWorker::compute2()
 
 void SpecificWorker::compute()
 {
-		double poseError, error, factor;
-		static int iter=0;
-		const double poseThreshold = 15;
-		const int maxIter = 1000;
-		
-		tie(poseError, error, factor) = experiment();
-		iter++;
-		
-// 		if( state == State::FIT_TABLE and (error < poseThreshold or factor < 0.001) )
-// 		{ 
-// 			qDebug() << "Exp. finished in " << iter << "iteraciones" << "error" << poseError << "factor" << factor;
-// 			state = State::SENSE;
-// 		}
-// 		else if( iter > maxIter)
-// 		{
-// 			qDebug() << "Exp. aborted";
-// 			state = State::SENSE;
-// 		}
-			
+	static bool firstTime=true, once=true;
+	static int iter=0, success=0, total=0;
+	const int maxIter = 1000;
+	static QFile file("exp.txt");
+	static QTextStream out;
+	static QVec correctPose;
+	static PointSeq pointSeqWNoise;
+	static float distToRef = 100;
+	
+	if( once )
+	{
+		if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+         return;
+		out.setDevice(&file);
+		once = false;
+	}
+	
+	if( firstTime )
+	{
+ 		tie(correctPose, pointSeqWNoise) = initExperiment(distToRef);
+		firstTime = false;
+		iter=0;
+		total++;
+	}
+	
+	double poseError, error, factor;
+	tie(poseError, error, factor) = experiment(correctPose, pointSeqWNoise);
+	iter++;
+	
+	if( poseError < 20 )
+	{
+		firstTime = true;
+		success++;
+		qDebug() << __FUNCTION__ << "Restart low error:" << poseError << (float)success/total*100 << "%" << "total" << total;
+	}
+	if( iter > 500 )
+	{
+		firstTime = true;
+		qDebug() << __FUNCTION__ << "Restart iter > 1000" << iter;
+	}
+	if( total > 20 )
+	{
+		qDebug() << __FUNCTION__ << "End of set:"  << (float)success/total*100 << "%" << "total" << total;		
+		out << "DIST " << distToRef <<" ITER " << 20 << " SUCCESS " << (float)success/total*100 << "\n";
+		firstTime = true;
+		total = 0;
+		success = 0;
+		distToRef += 10;
+	}
+	if( distToRef > 400)
+	{
+		file.close();
+		qFatal("Fary");
+	}
 }
 
-tuple< double, double, double> SpecificWorker::experiment()
+tuple< QVec, PointSeq> SpecificWorker::initExperiment(float initialRange)
+{
+ 	Mat gray, depth;
+	Mat frame(480, 640, CV_8UC3);
+ 	PointSeq pointSeq, pointSeqR; 
+	PointSeq sample, pointSeqW, pointSeqWNoise;
+	QVec offset;
+	
+	std::tie(frame, gray, depth, pointSeq) = this->getImage();
+	QImage img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
+	label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
+	pointSeqWNoise = table.filterTablePoints(pointSeq, depth, true);
+	viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
+	
+	// ground truth according to .xml
+	QVec correctPose = innerModel->transform6D("world","table_t");
+	
+	// compute initial search pose
+	QVec initialPose = correctPose + table.getInitialPose(initialRange);
+	table.setPose( initialPose );
+	
+	//Initialize metropolis
+	metropolis( 0 , QVec() , true);	
+	
+	//qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size() << pointSeqR.size();
+			
+	return make_tuple( correctPose, pointSeqWNoise );
+}
+
+tuple< double, double, double> SpecificWorker::experiment(const QVec &correctPose, const PointSeq &percept)
 {
  	static Mat gray, grayR, depth, depthR;
 	static Mat frame(480, 640, CV_8UC3), frameR(480, 640, CV_8UC3);
  	static PointSeq pointSeq, pointSeqR; 
 	float d;
 	static  PointSeq sample, pointSeqW, pointSeqWNoise;
-	static QVec newPose;
 	QImage img;
 	QVec offset;
 	double  poseErr, factor;
 	
-	switch( state )
- 	{
-		case State::INIT:
-			//qDebug() << "State::INIT";
-			break;
-					
-		case State::SENSE:
-			qDebug() << "State::SENSE";
-			std::tie(frame, gray, depth, pointSeq) = this->getImage();
-			img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
-			label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-			pointSeqWNoise = table.filterTablePoints(pointSeq, depth, true);
-			viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
-			
-			// ground truth according to .xml
-			correctPose = innerModel->transform6D("world","table_t");
-			
-			// compute initial search pose
-			initialPose = correctPose + table.getInitialPose();
-			newPose = initialPose;
-			table.setPose( initialPose );
-			
-			// render model
-			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
-			
-			// filter points not belonging to the table
-			sample = table.filterTablePoints(pointSeqR, depthR, false);
+	std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
+	sample = table.filterTablePoints(pointSeqR, depthR, false);
+	poseErr = (correctPose - table.getPose() ).norm2();
 	
-			//Initialize metropolis
-			metropolis( 0 , QVec() , true);	
-			//table.initMetropolis();
-			
-			//copy model point cloud to the viewer
-			viewer->setCloud(sample, QVec::vec3(0,1,0));
-
-			qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size() << pointSeqR.size();
+	//compute distance between clouds
+	d = distance( sample, percept);	
+	
+	QVec newPose;
+	tie(newPose, factor) = metropolis( d , table.getPose());	
 		
-		state = State::FIT_TABLE;
-			break;
-			
-		case State::FIT_TABLE:
-			
-			poseErr = (correctPose - newPose).norm2();
-			
-			//compute distance between clouds
- 			d = distance( sample, pointSeqWNoise);	
-			if( d==0 ) break;
-			
- 			tie(newPose, factor) = metropolis( d , newPose);	
-			//newPose = table.metropolis(d);
-			
-			table.setPose( newPose );
-			
-			std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
-			
-			sample = table.filterTablePoints(pointSeqR, depthR, false);
-			
-			tabletype->moveTable(newPose, "world");
-			tabletype->render( frameColor, this->label2 );			
-			
-			//table.projectMeshOnFrame( framecolor, label2);
-			
-			viewer->setCloud(sample, QVec::vec3(0,1,0));
-			
-			yposeTQ.enqueue( poseErr );
-			yQ.enqueue(d/1000); 
-			lcdNumber->display(poseErr);
-			//qDebug() << __FUNCTION__ << "cloud distance: "<< d << "pose distance:" << poseErr << "sample size:" << sample.size() << "real size:" << pointSeqWNoise.size();
-			break;
-	}	
+	table.setPose( newPose );	
+	tabletype->moveTable(newPose, "world");
+	tabletype->render( frameColor, this->label2 );			
+	viewer->setCloud(sample, QVec::vec3(0,1,0));
+	
+	yposeTQ.enqueue( poseErr );
+	yQ.enqueue(d/1000); 
+	lcdNumber->display(poseErr);
 	
 	//Make 3D points move
 	viewer->resize(this->frame->width(),this->frame->height());
@@ -329,7 +340,7 @@ tuple<double, double> SpecificWorker::mapError(const QVec &newPose, const PointS
 
 	//Draw error signal
 	customPlot->graph(0)->setData(xQ.getVector(), yQ.getVector());
-	customPlot->graph(1)->setData(xQ.getVector(), yposeTQ.getVector());
+	//customPlot->graph(1)->setData(xQ.getVector(), yposeTQ.getVector());
 	customPlot->replot(QCustomPlot::rpImmediate);
 	
 	return make_tuple(d, poseErr);
@@ -435,13 +446,27 @@ double SpecificWorker::distance(PointSeq orig, PointSeq dest)
 		float d;
 		for( uint j=0; j< dest.size(); j++ )
 		{
-				PointXYZ &p = orig[i];
-				PointXYZ &q = dest[j];
-				d = ((p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y) + (p.z-q.z)*(p.z-q.z));
+ 				PointXYZ &p = orig[i];
+ 				PointXYZ &q = dest[j];
+				//p.x = p.x /1000.;p.y = p.y /1000.;p.z = p.z /1000.;q.x = q.x /1000.;q.y = q.y /1000.;q.z = q.z /1000.;
+ 				d = sqrt((p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y) + (p.z-q.z)*(p.z-q.z));
+ 				if( d < minDist )
+ 					minDist = d;
+		}
+		sum += minDist;
+	}	
+	for( uint i=0; i<dest.size(); i++ )
+	{
+		float minDist = std::numeric_limits< float >::max();
+		float d;
+		for( uint j=0; j< orig.size(); j++ )
+		{
+				PointXYZ &p = orig[j];
+				PointXYZ &q = dest[i];
+				//p.x = p.x /1000.;p.y = p.y /1000.;p.z = p.z /1000.;q.x = q.x /1000.;q.y = q.y /1000.;q.z = q.z /1000.;
+				d = sqrt((p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y) + (p.z-q.z)*(p.z-q.z));
 				if( d < minDist )
-				{
 					minDist = d;
-				}
 		}
 		sum += minDist;
 	}	
@@ -469,18 +494,18 @@ tuple< QVec, double> SpecificWorker::metropolis(double error, const QVec &pose, 
 // 	qDebug() << __FUNCTION__ << "ratio" << ratio << "p" << p << "pant" << pAnt << "error" << error << "errorAnt" << errorAnt;
 	
 
-	if( errorAnt-error > 1 )
+	if( errorAnt-error > 0 )
 	{
-		qDebug() <<	 "ACCEPT one, err diff" << errorAnt - error << "ratio" << errorAnt/error << "errsA" << errorAnt << "err" << error;
+		//qDebug() <<	 "ACCEPT one, err diff" << errorAnt - error << "ratio" << errorAnt/error << "errsA" << errorAnt << "err" << error;
 		errorAnt = error;
 		lastPose = pose;
 	}
 	else
 	{	
  		double draw = (double)qrand()/RAND_MAX;
- 		if( draw >= fabs(error/errorAnt)/3.5 )
+ 		if( draw >= fabs(error/errorAnt)/1.5 )
  		{
-			qDebug() << __FUNCTION__ << "ACCEPT 2 with draw > fixed ratio" << draw << "ratio" << errorAnt/error << "errsA" << errorAnt << "err" << error;
+			//qDebug() << __FUNCTION__ << "ACCEPT 2 with draw > fixed ratio" << draw << "ratio" << errorAnt/error << "errsA" << errorAnt << "err" << error;
  			errorAnt = error;
  			lastPose = pose;
 			acc+=1;
@@ -500,8 +525,7 @@ tuple< QVec, double> SpecificWorker::metropolis(double error, const QVec &pose, 
 	cont = cont + 0.02;	
 	reps+=1;
 	double acratio = acc/reps*100.0;
-	if (acratio>0) 
-		qDebug() << __FUNCTION__ << "ratio percentage:" << (int)acratio << "%";
+	//qDebug() << __FUNCTION__ << "ratio percentage:" << (int)acratio << "%";
 	return make_tuple(lastPose + delta, factor);
 }
 

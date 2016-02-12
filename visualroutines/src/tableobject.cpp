@@ -67,7 +67,7 @@ RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointS
 				if( pw.y()>100 and pw.z()<1000 )
 				{
 					if( addNoise) 
-						pw = pw + QVec::uniformVector(3, -30, 30);
+						pw = pw + QVec::uniformVector(3, -10, 10);
 					
 					RoboCompRGBD::PointXYZ pn = { pw.x(),pw.y(),pw.z(),0 };
 					lp.push_back(pn);
@@ -102,10 +102,10 @@ QVec TableObject::getSample(double factor)
 	return res;
 }
 
-QVec TableObject::getInitialPose()
+QVec TableObject::getInitialPose(float r)
 {
 	QVec res = QVec::zeros(6); 
-	res.inject(QVec::uniformVector(3, -250, 250),0);
+	res.inject(QVec::uniformVector(3, -r, r),0);
 //	res.inject(QVec::uniformVector(1, -0.1, 0.1),3);	
 //	res.inject(QVec::uniformVector(1, -0.4, 0.4),4);
 //	res.inject(QVec::uniformVector(1, -0.1, 0.1),5);	

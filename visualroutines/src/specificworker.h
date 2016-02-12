@@ -80,7 +80,8 @@ private:
 	tuple< QVec, double > metropolis( double error, const QVec& pose, bool reset = false);
 	QVec getInitialSample();
 	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
-	tuple< double, double, double > experiment();
+	tuple< double, double, double > experiment(const QVec& correctPose, const PointSeq &percept);
+	tuple< QVec, PointSeq > initExperiment(float initialRange);
 	tuple<double, double> mapError(const QVec &newPose, const PointSeq &groundTruth, const QVec &correctPose);
 	tuple< QVec, PointSeq>  initMapError();
 

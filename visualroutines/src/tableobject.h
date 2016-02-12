@@ -39,7 +39,8 @@ class TableObject
 		void projectMeshOnFrame( const cv::Mat &framecolor, QWidget *label){};
 		RoboCompRGBD::PointSeq filterTablePoints(const RoboCompRGBD::PointSeq &points, const Mat &depth, bool addNoise);
 		QVec getSample(double factor=0.0);
-		QVec getInitialPose();
+		QVec getInitialPose(float r);
+		inline QVec getPose() { return currentPose;};
 		
 	private:
 		InnerModel *innerModel;

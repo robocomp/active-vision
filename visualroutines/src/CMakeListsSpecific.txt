@@ -28,7 +28,7 @@ SET ( HEADERS
 INCLUDE($ENV{ROBOCOMP}/cmake/modules/opencv2.cmake)
 INCLUDE($ENV{ROBOCOMP}/cmake/modules/ipp.cmake)
 
-SET ( SPECIFIC_LIBS OpenMeshCore QGLViewer glut GL -fopenmp)
+SET ( SPECIFIC_LIBS OpenMeshCore QGLViewer glut GL -fopenmp nabo)
 
-ADD_DEFINITIONS( -std=c++11 -fopenmp  -msse4.1)
+ADD_DEFINITIONS( -std=c++11 -fopenmp  -msse4.1 )
 

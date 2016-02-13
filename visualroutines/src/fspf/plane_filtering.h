@@ -37,33 +37,32 @@
 
 using namespace std;
 
-
 class PlaneFilter{
   
 public:
   /// Parameters for plane filtering
   typedef struct{
     // Parameters for vanilla FSPF
-    unsigned int maxPoints;
-    unsigned int numSamples;
-    unsigned int numLocalSamples;
-    unsigned int planeSize;
-    float WorldPlaneSize;
-    float maxError;
-    float minInlierFraction;
-    float maxDepthDiff;
-    unsigned int numRetries;
+    unsigned int maxPoints = 2000;
+    unsigned int numSamples = 20000;
+    unsigned int numLocalSamples = 80;
+    unsigned int planeSize = 100;
+    float WorldPlaneSize = 50;
+    float maxError = 20;
+    float minInlierFraction = 2;
+    float maxDepthDiff = 1800;
+    unsigned int numRetries = 2;
     
     // Parameters for polygonization
-    bool runPolygonization;
-    float minConditionNumber;
+    bool runPolygonization =false;
+    float minConditionNumber = 0.1;
     
     //Thresholds for polygon merging
     double maxCosineError;
     float maxPolygonDist;
     float maxOffsetDiff;
     float minVisibilityFraction;
-    bool filterOutliers;
+    bool filterOutliers = true;
   } PlaneFilterParams;
   
 private:
@@ -78,14 +77,12 @@ private:
 public:
   PlaneFilter(PlaneFilterParams &_filterParams);
 
-
   //void setDepthCamera(DepthCam *_depthCam){depthCam = _depthCam;}
   //void setFilterParameters(PlaneFilterParams &params){filterParams = params;}
   //void setParameters(DepthCam *_depthCam, PlaneFilterParams &_filterParams){setDepthCamera(_depthCam); setFilterParameters(_filterParams);}
   
   void setParameters(PlaneFilterParams _filterParams){filterParams = _filterParams;}
 
-  
   /// Sample random location in specified window of depth image. Returns true if succesful, along with the sampled point 'p'. Returns false otherwise.
   inline bool sampleLocation(const RoboCompRGBD::PointSeq &points, int& index, int& row, int& col, Vector3f& p, int rMin, int height, int cMin, int width);
   /// Accepts a depth image, returns filtered point cloud + normals, outliers, and all sampled points

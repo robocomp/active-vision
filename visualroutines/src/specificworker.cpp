@@ -23,6 +23,8 @@
 */
 SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
 {
+	
+	qDebug() << __FUNCTION__ << "hola";
 	this->resize(QDesktopWidget().availableGeometry(this).size() * 0.6);
 	 
 		//GLVIEWER
@@ -55,29 +57,9 @@ SpecificWorker::SpecificWorker(MapPrx& mprx) : GenericWorker(mprx)
  	for(int i=0; i<100; i++)
 		{	xQ.enqueue((double)i);yposeTQ.enqueue((double)i); yposeRQ.enqueue((double)i);}
 	
-	
-	 /////////////////////////////////////////////
-   ///             FSPF
-   ////////////////////////////////////////////
-  PlaneFilter::PlaneFilterParams filterParams;
-	filterParams.maxPoints = 2000;
-	filterParams.numSamples = 20000;
-	filterParams.numLocalSamples = 80;
-	filterParams.planeSize = 100;
-	filterParams.WorldPlaneSize = 50;
-	filterParams.minInlierFraction = 0.8;
-	filterParams.maxError = 20;
-	filterParams.numRetries = 2;
-	filterParams.maxDepthDiff = 1800;
-	// Parameters for polygonization
-	filterParams.runPolygonization = false;
-	filterParams.minConditionNumber = 0.1;
-	filterParams.filterOutliers = true;
-	planeFilter = new PlaneFilter( filterParams);
-	
-	
 	connect(resetButton, SIGNAL(clicked()), this, SLOT(resetButtonSlot()));
 	connect(startButton, SIGNAL(clicked()), this, SLOT(startButtonSlot()));
+	
 }
 
 /**
@@ -128,7 +110,7 @@ bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 	return true;
 }
 
-void SpecificWorker::compute2()
+void SpecificWorker::compute1()
 {
 	static bool firstTime=true;
 	static QVec correctPose;
@@ -144,7 +126,7 @@ void SpecificWorker::compute2()
 		out.setDevice(&file);
 		tie(correctPose, groundTruth) = initMapError();
 		for(float i=-300; i< 300; i+=10)
-			for (float j = -100 ; j < 300; j+=10) 
+			for (float j = -100 ; j < 400; j+=10) 
 				lista.append( QVec::vec6( i,0.,j,0.,0.,0.) );
 		qDebug() << __FUNCTION__ << "lista creada" << lista.size();
 		tie(correctPose, groundTruth) = initMapError();
@@ -172,12 +154,15 @@ void SpecificWorker::compute()
 {
 	static bool firstTime=true, once=true;
 	static int iter=0, success=0, total=0;
-	const int maxIter = 1000;
+	const int repetitions = 20;
 	static QFile file("exp.txt");
 	static QTextStream out;
 	static QVec correctPose;
 	static PointSeq pointSeqWNoise;
 	static float distToRef = 100;
+	static double maxPoseError = 20;
+	static const int maxIter = 500;
+	static Nabo::NNSearchF *nns;
 	
 	if( once )
 	{
@@ -189,28 +174,32 @@ void SpecificWorker::compute()
 	
 	if( firstTime )
 	{
- 		tie(correctPose, pointSeqWNoise) = initExperiment(distToRef);
+ 		tie(correctPose, pointSeqWNoise, nns) = initExperiment(distToRef);
 		firstTime = false;
 		iter=0;
 		total++;
 	}
 	
 	double poseError, error, factor;
-	tie(poseError, error, factor) = experiment(correctPose, pointSeqWNoise);
+	if( resetButton->isDown() )
+		firstTime = true;
+	tie(poseError, error, factor) = experiment(correctPose, pointSeqWNoise, nns);
 	iter++;
 	
-	if( poseError < 20 )
+	if( poseError < maxPoseError )
 	{
 		firstTime = true;
 		success++;
 		qDebug() << __FUNCTION__ << "Restart low error:" << poseError << (float)success/total*100 << "%" << "total" << total;
 	}
-	if( iter > 500 )
+	
+	if( iter > maxIter )
 	{
 		firstTime = true;
 		qDebug() << __FUNCTION__ << "Restart iter > 1000" << iter;
 	}
-	if( total > 20 )
+	
+	if( total > repetitions )
 	{
 		qDebug() << __FUNCTION__ << "End of set:"  << (float)success/total*100 << "%" << "total" << total;		
 		out << "DIST " << distToRef <<" ITER " << 20 << " SUCCESS " << (float)success/total*100 << "\n";
@@ -219,14 +208,15 @@ void SpecificWorker::compute()
 		success = 0;
 		distToRef += 10;
 	}
+	
 	if( distToRef > 400)
 	{
 		file.close();
-		qFatal("Fary");
 	}
 }
 
-tuple< QVec, PointSeq> SpecificWorker::initExperiment(float initialRange)
+
+tuple< QVec, PointSeq, Nabo::NNSearchF *> SpecificWorker::initExperiment(float initialRange)
 {
  	Mat gray, depth;
 	Mat frame(480, 640, CV_8UC3);
@@ -238,6 +228,10 @@ tuple< QVec, PointSeq> SpecificWorker::initExperiment(float initialRange)
 	QImage img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 	label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
 	pointSeqWNoise = table.filterTablePoints(pointSeq, depth, true);
+	
+	//table.orientedPatches(pointSeq);
+	//qFatal("fary");
+	
 	viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
 	
 	// ground truth according to .xml
@@ -251,11 +245,20 @@ tuple< QVec, PointSeq> SpecificWorker::initExperiment(float initialRange)
 	metropolis( 0 , QVec() , true);	
 	
 	//qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size() << pointSeqR.size();
-			
-	return make_tuple( correctPose, pointSeqWNoise );
+	
+	perceptE.resize(3,pointSeqWNoise.size());
+  for(uint i=0; i<pointSeqWNoise.size(); i++)
+	{
+		perceptE(0,i) = pointSeqWNoise[i].x;
+		perceptE(1,i) = pointSeqWNoise[i].y;
+		perceptE(2,i) = pointSeqWNoise [i].z;
+	}
+	Nabo::NNSearchF *nns = Nabo::NNSearchF::createKDTreeLinearHeap(perceptE);
+	
+	return make_tuple( correctPose, pointSeqWNoise, nns );
 }
 
-tuple< double, double, double> SpecificWorker::experiment(const QVec &correctPose, const PointSeq &percept)
+tuple< double, double, double> SpecificWorker::experiment(const QVec &correctPose, const PointSeq &percept, Nabo::NNSearchF *nns)
 {
  	static Mat gray, grayR, depth, depthR;
 	static Mat frame(480, 640, CV_8UC3), frameR(480, 640, CV_8UC3);
@@ -271,7 +274,16 @@ tuple< double, double, double> SpecificWorker::experiment(const QVec &correctPos
 	poseErr = (correctPose - table.getPose() ).norm2();
 	
 	//compute distance between clouds
-	d = distance( sample, percept);	
+	MatrixXf sampleE(3,sample.size());
+  for(uint i=0; i<sample.size(); i++)
+	{
+		sampleE(0,i) = sample[i].x;
+		sampleE(1,i) = sample[i].y;
+		sampleE(2,i) = sample[i].z;
+	}
+
+	d = distance( perceptE, sampleE, nns );
+	//d = distance( sample, percept);	
 	
 	QVec newPose;
 	tie(newPose, factor) = metropolis( d , table.getPose());	
@@ -425,7 +437,38 @@ QVec SpecificWorker::getInitialSample()
 	return res;
 }
 
+double SpecificWorker::distance(const MatrixXf &percept, const MatrixXf &cloud, Nabo::NNSearchF *perceptTree)
+{
+	const int K = 1;
+// 	VectorXi indices(K);
+// 	VectorXf dists(K);
+	
+	MatrixXi indicesC(K,cloud.cols());
+	MatrixXf distsC(K,cloud.cols());
+	double sum=0;
+	
+	perceptTree->knn(cloud, indicesC, distsC, K);
+	sum += distsC.colwise().sum().sum();
+	
+// 	for( uint i=0; i<cloud.cols(); i++ )
+// 	{
+// 		perceptTree->knn(cloud.col(i), indices, dists, K);
+// 		sum += dists(0);
+// 	}
 
+	MatrixXi indicesP(K,percept.cols());
+	MatrixXf distsP(K,percept.cols());
+	Nabo::NNSearchF* nns = Nabo::NNSearchF::createKDTreeLinearHeap(cloud);
+	nns->knn(percept, indicesP, distsP, K);
+	sum += distsP.colwise().sum().sum();
+	
+// 	for( uint i=0; i<percept.cols(); i++ )
+// 	{
+// 		nns->knn(percept.col(i), indices, dists, K);
+// 		sum += dists(0);
+// 	}
+	return sum;
+}
 
 /**
  * @brief Computes the sum of the minimum distances between the clouds
@@ -436,7 +479,7 @@ QVec SpecificWorker::getInitialSample()
  */
 
 double SpecificWorker::distance(PointSeq orig, PointSeq dest)
-{
+{	
 	double sum=0;
 	
 	#pragma omp parallel
@@ -524,8 +567,7 @@ tuple< QVec, double> SpecificWorker::metropolis(double error, const QVec &pose, 
 		
 	cont = cont + 0.02;	
 	reps+=1;
-	double acratio = acc/reps*100.0;
-	//qDebug() << __FUNCTION__ << "ratio percentage:" << (int)acratio << "%";
+	//qDebug() << __FUNCTION__ << "ratio percentage:" << (int)(acc/reps*100.0) << "%";
 	return make_tuple(lastPose + delta, factor);
 }
 
@@ -565,12 +607,11 @@ std::tuple<Mat, Mat, Mat, PointSeq> SpecificWorker::getImage()
 
 void SpecificWorker::resetButtonSlot()
 {
-	state = State::SENSE;
+	
 }
 
 void SpecificWorker::startButtonSlot()
 {
-	state = State::SENSE;
 }
 
 

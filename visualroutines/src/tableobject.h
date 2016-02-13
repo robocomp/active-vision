@@ -25,6 +25,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <chrono>
 #include <random>
+#include "fspf/plane_filtering.h"
 
 using namespace cv;
 
@@ -41,6 +42,7 @@ class TableObject
 		QVec getSample(double factor=0.0);
 		QVec getInitialPose(float r);
 		inline QVec getPose() { return currentPose;};
+		void orientedPatches(const RoboCompRGBD::PointSeq &points);
 		
 	private:
 		InnerModel *innerModel;
@@ -49,6 +51,8 @@ class TableObject
 		
 		void filterTablePoints(){};
 		
+		//fspf
+		PlaneFilter *planeFilter;
 };
 
 #endif // TABLEOBJECT_H

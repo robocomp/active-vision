@@ -20,6 +20,12 @@
 TableObject::TableObject() 
 {
 	tableName = "vtable";
+	
+	/////////////////////////////////////////////
+  ///             FSPF
+  ////////////////////////////////////////////
+  PlaneFilter::PlaneFilterParams filterParams;
+	planeFilter = new PlaneFilter( filterParams);
 }
 
 TableObject::~TableObject()
@@ -30,6 +36,15 @@ void TableObject::setPose(const QVec& pose)
 {
 	currentPose = pose;
 	innerModel->updateTransformValues("vtable_t", pose.x(), pose.y(), pose.z(), pose.rx(), pose.ry(), pose.rz());
+}
+
+void TableObject::orientedPatches(const RoboCompRGBD::PointSeq &points)
+{
+	vector< vector3f > filteredPointCloud, pointsNormals ,outlierCloud;
+  vector< vector2i > pixelLocs;
+  vector< PlanePolygon > polygons;
+	planeFilter->GenerateFilteredPointCloud(points, filteredPointCloud, pixelLocs, pointsNormals, outlierCloud, polygons); 
+	qDebug() << __FUNCTION__ << points.size() << filteredPointCloud.size() << pixelLocs.size() << pointsNormals.size() << polygons.size();
 }
 
 /**
@@ -44,7 +59,6 @@ RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointS
 {
 	RoboCompRGBD::PointSeq lp;
 	int lowThreshold=10;
-	int highThreshold = 200;
 	int ratio = 3;
 	int kernel_size = 5;
 	

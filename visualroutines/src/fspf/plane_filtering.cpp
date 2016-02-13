@@ -172,7 +172,8 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
   float d, meanDepth;
   int sampleRadiusH, sampleRadiusV, rMin, rMax, cMin, cMax, dR, dC;
   
-  for(unsigned int i=0; i<filterParams.numSamples && numPoints<filterParams.maxPoints; i++){
+  for(unsigned int i=0; i<filterParams.numSamples && numPoints<filterParams.maxPoints; i++)
+	{
     
     //generate random point p1 anywhere on image
     if(!sampleLocation(points, ind1, l1.y, l1.x, p1, planeSizeH, h2, planeSizeH, w2))
@@ -188,12 +189,10 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
     
    // qDebug() << "p1" << p1.x() << p1.y() << p1.z() << "p2"  << p2.x() << p2.y() << p2.z();
     
-    
-    
     //Generate Plane normal (n) and distance (d) from origin (distance-normal parameterization of plane)
     Vector3f n = ((p1-p2).cross(p3-p2)).normalized();
-    
     d = p1.dot(n);
+		
     meanDepth = (p1.x()+p2.x()+p3.x())*0.333333333333333333333333;
     sampleRadiusH = ceil(sampleRadiusHFactor/meanDepth*sqrt(1.0-sq(n.y())));
     sampleRadiusV = ceil(sampleRadiusVFactor/meanDepth*sqrt(1.0-sq(n.z())));
@@ -220,36 +219,41 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
         continue;
       
       float err = fabs(n.dot(p) - d);
-      
-
-      if(err<filterParams.maxError && p.x()<meanDepth+filterParams.maxDepthDiff && p.x()>meanDepth-filterParams.maxDepthDiff){
+      if(err<filterParams.maxError && p.x()<meanDepth+filterParams.maxDepthDiff && p.x()>meanDepth-filterParams.maxDepthDiff)
+			{
         inliers++;
         neighborhoodInliers.push_back(EIG2GV3(p));
         neighborhoodPixelLocs.push_back(l);
-      }else{
+      }
+      else
+			{
         outliers++;
       }
     }
-    if(inliers>=minInliers && inliers>3){
+    if(inliers>=minInliers && inliers>3)
+		{
       //==Polygonization==
       if(filterParams.runPolygonization)
       {
         PlanePolygon poly(neighborhoodInliers,neighborhoodPixelLocs);
         if(poly.validPolygon)
-	{
+				{
           polygons.push_back(poly);	  
-	}
-	if(!(isnan(poly.normal.x) or isnan(poly.normal.y) or isnan(poly.normal.z))){
-	  n = Vector3f(0,0,0);
-	}
-	else {
-	  n = Vector3f(V3COMP(poly.normal));
-	}
+				}
+				if(!(isnan(poly.normal.x) or isnan(poly.normal.y) or isnan(poly.normal.z)))
+				{
+					n = Vector3f(0,0,0);
+				}
+				else 
+				{
+					n = Vector3f(V3COMP(poly.normal));
+				}
       }
       //This is a local plane
       vector3f ng = EIG2GV3(n);
       ng.w = 0;
-      for(int i=0; i<(int)neighborhoodInliers.size(); i++){
+      for(int i=0; i<(int)neighborhoodInliers.size(); i++)
+			{
         //filteredPointCloud.push_back(pointCloud[i]);
         filteredPointCloud.push_back(neighborhoodInliers[i]);
         pointCloudNormals.push_back(ng);
@@ -265,10 +269,12 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
       pixelLocs.push_back(l2);
       pixelLocs.push_back(l3);
       numPoints += neighborhoodInliers.size()+3;
-      numPlanes = numPlanes+1;
-      
-    }else{
-      for(int i=0; i<(int)neighborhoodInliers.size(); i++){
+      numPlanes = numPlanes+1;  
+    }
+    else
+		{
+      for(int i=0; i<(int)neighborhoodInliers.size(); i++)
+			{
         outlierCloud.push_back(neighborhoodInliers[i]);
       }
       outlierCloud.push_back(EIG2GV3(p1));
@@ -281,12 +287,15 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
     //Remove planar points from outlier cloud
     static const float MaxPlanarDist = filterParams.maxError;
     bool planar = false;
-    for(unsigned int i=0; i<outlierCloud.size(); i++){ 
+    for(unsigned int i=0; i<outlierCloud.size(); i++)
+		{ 
       planar = false;
-      for(unsigned int j=0; !planar && j<polygons.size(); j++){ 
+      for(unsigned int j=0; !planar && j<polygons.size(); j++)
+			{ 
          planar = fabs(polygons[j].normal.dot(outlierCloud[i])+polygons[j].offset)<MaxPlanarDist;
       }
-      if(planar){
+      if(planar)
+			{
         //Need to remove this point
         outlierCloud.erase(outlierCloud.begin()+i);
         i--;

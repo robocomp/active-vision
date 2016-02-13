@@ -45,10 +45,11 @@
 #include <random>
 #include <chrono>
 #include "fspf/plane_filtering.h"
+#include <nabo/nabo.h>
 
+using namespace Eigen;
 using namespace cv;
 typedef std::vector<cv::Point> Points;
-
 
 class SpecificWorker : public GenericWorker
 {
@@ -67,7 +68,7 @@ public:
 
 public slots:
 	void compute(); 	
-	void compute2();
+	void compute1();
 	void resetButtonSlot();
 	void startButtonSlot();
 	
@@ -77,18 +78,15 @@ private:
 	
 	void initMachine();
 	double distance(PointSeq orig, PointSeq dest);
+	double distance(const MatrixXf& percept, const MatrixXf& cloud, Nabo::NNSearchF* perceptTree);
 	tuple< QVec, double > metropolis( double error, const QVec& pose, bool reset = false);
 	QVec getInitialSample();
 	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
-	tuple< double, double, double > experiment(const QVec& correctPose, const PointSeq &percept);
-	tuple< QVec, PointSeq > initExperiment(float initialRange);
+	tuple< double, double, double > experiment(const QVec& correctPose, const PointSeq &percept, Nabo::NNSearchF *nns);
+	tuple< QVec, PointSeq, Nabo::NNSearchF* > initExperiment(float initialRange);
 	tuple<double, double> mapError(const QVec &newPose, const PointSeq &groundTruth, const QVec &correctPose);
 	tuple< QVec, PointSeq>  initMapError();
 
-	
-	enum class State {INIT, FIT_TABLE, SENSE};
-	State state = State::INIT;
-	
 	GLViewer *viewer;
 	TableObject table;
 	QVec correctPose, initialPose;
@@ -101,8 +99,7 @@ private:
 	OsgView *osgView;
 	InnerModelViewer *innerViewer;
 	
-	//fspf
-	PlaneFilter *planeFilter;
+	MatrixXf perceptE;
 
 };
 

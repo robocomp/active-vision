@@ -163,6 +163,7 @@ void SpecificWorker::compute()
 	static double maxPoseError = 20;
 	static const int maxIter = 500;
 	static Nabo::NNSearchF *nns;
+	static MatrixXf perceptE;
 	
 	if( once )
 	{
@@ -174,17 +175,18 @@ void SpecificWorker::compute()
 	
 	if( firstTime )
 	{
- 		tie(correctPose, pointSeqWNoise, nns) = initExperiment(distToRef);
-		firstTime = false;
+ 		tie(correctPose, perceptE, nns) = initExperiment(distToRef);
+		if( nns != nullptr)
+			firstTime = false;
 		iter=0;
 		total++;
 	}
 	
-	double poseError, error, factor;
-	if( resetButton->isDown() )
-		firstTime = true;
-	tie(poseError, error, factor) = experiment(correctPose, pointSeqWNoise, nns);
-	iter++;
+ 	double poseError, error, factor;
+ 	if( resetButton->isDown() )
+ 		firstTime = true;
+ 	tie(poseError, error, factor) = experiment(correctPose, perceptE, nns);
+ 	iter++;
 	
 	if( poseError < maxPoseError )
 	{
@@ -216,23 +218,25 @@ void SpecificWorker::compute()
 }
 
 
-tuple< QVec, PointSeq, Nabo::NNSearchF *> SpecificWorker::initExperiment(float initialRange)
+tuple< QVec, MatrixXf, Nabo::NNSearchF *> SpecificWorker::initExperiment(float initialRange)
 {
  	Mat gray, depth;
 	Mat frame(480, 640, CV_8UC3);
- 	PointSeq pointSeq, pointSeqR; 
-	PointSeq sample, pointSeqW, pointSeqWNoise;
+ 	PointSeq pointSeq,sample, pointSeqWNoise;
 	QVec offset;
 	
 	std::tie(frame, gray, depth, pointSeq) = this->getImage();
 	QImage img = QImage(depth.data, depth.cols, depth.rows, QImage::Format_Indexed8);
 	label->setPixmap(QPixmap::fromImage(img).scaled(label->width(), label->height()));
-	pointSeqWNoise = table.filterTablePoints(pointSeq, depth, true);
 	
-	//table.orientedPatches(pointSeq);
-	//qFatal("fary");
-	
+	pointSeqWNoise = table.filterTablePoints(pointSeq, depth, false);		
+	//pointSeqWNoise = table.orientedPatches(pointSeqWNoise);
+
 	viewer->setSensedCloud(pointSeqWNoise, QVec::vec3(1,0,0));
+
+	if(pointSeqWNoise.size() == 0)
+		return make_tuple(QVec(), MatrixXf(), nullptr);
+	
 	
 	// ground truth according to .xml
 	QVec correctPose = innerModel->transform6D("world","table_t");
@@ -244,9 +248,9 @@ tuple< QVec, PointSeq, Nabo::NNSearchF *> SpecificWorker::initExperiment(float i
 	//Initialize metropolis
 	metropolis( 0 , QVec() , true);	
 	
-	//qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size() << pointSeqR.size();
+	qDebug() << __FUNCTION__ << "sensed:" << pointSeqWNoise.size() << "model:" << sample.size() << pointSeq.size();
 	
-	perceptE.resize(3,pointSeqWNoise.size());
+	perceptE.resize(3, pointSeqWNoise.size());
   for(uint i=0; i<pointSeqWNoise.size(); i++)
 	{
 		perceptE(0,i) = pointSeqWNoise[i].x;
@@ -254,59 +258,64 @@ tuple< QVec, PointSeq, Nabo::NNSearchF *> SpecificWorker::initExperiment(float i
 		perceptE(2,i) = pointSeqWNoise [i].z;
 	}
 	Nabo::NNSearchF *nns = Nabo::NNSearchF::createKDTreeLinearHeap(perceptE);
-	
-	return make_tuple( correctPose, pointSeqWNoise, nns );
+
+	return make_tuple( correctPose, perceptE, nns );
 }
 
-tuple< double, double, double> SpecificWorker::experiment(const QVec &correctPose, const PointSeq &percept, Nabo::NNSearchF *nns)
+tuple< double, double, double> SpecificWorker::experiment(const QVec &correctPose, const MatrixXf &percept, Nabo::NNSearchF *nns)
 {
- 	static Mat gray, grayR, depth, depthR;
-	static Mat frame(480, 640, CV_8UC3), frameR(480, 640, CV_8UC3);
- 	static PointSeq pointSeq, pointSeqR; 
+ 	Mat gray, depth;
+	Mat frame(480, 640, CV_8UC3);
+ 	PointSeq pointSeq, sample; 
 	float d;
-	static  PointSeq sample, pointSeqW, pointSeqWNoise;
 	QImage img;
 	QVec offset;
 	double  poseErr, factor;
 	
-	std::tie(frameR, grayR, depthR, pointSeqR) = renderAndGenerateImages();
-	sample = table.filterTablePoints(pointSeqR, depthR, false);
-	poseErr = (correctPose - table.getPose() ).norm2();
+	std::tie(frame, gray, depth, pointSeq) = renderAndGenerateImages();
 	
+	sample = table.filterTablePoints(pointSeq, depth, false);
+	//qDebug() << __FUNCTION__ << "sample" << sample.size();
+	
+	//sample = table.orientedPatches(sample);
+	
+	poseErr = (correctPose - table.getPose() ).norm2();
+
 	//compute distance between clouds
+	if(sample.size() == 0)
+		return make_tuple(9999999, 99999999, factor);
+	
 	MatrixXf sampleE(3,sample.size());
   for(uint i=0; i<sample.size(); i++)
 	{
-		sampleE(0,i) = sample[i].x;
-		sampleE(1,i) = sample[i].y;
-		sampleE(2,i) = sample[i].z;
+		sampleE(0,i) = sample[i].x;	sampleE(1,i) = sample[i].y;	sampleE(2,i) = sample[i].z;
 	}
-
-	d = distance( perceptE, sampleE, nns );
-	//d = distance( sample, percept);	
+	
+	qDebug() << __FUNCTION__ << "hola";
+	
+	d = distance( percept, sampleE, nns );
 	
 	QVec newPose;
 	tie(newPose, factor) = metropolis( d , table.getPose());	
 		
 	table.setPose( newPose );	
+	
+	//Draw
 	tabletype->moveTable(newPose, "world");
 	tabletype->render( frameColor, this->label2 );			
 	viewer->setCloud(sample, QVec::vec3(0,1,0));
-	
 	yposeTQ.enqueue( poseErr );
 	yQ.enqueue(d/1000); 
 	lcdNumber->display(poseErr);
-	
 	//Make 3D points move
 	viewer->resize(this->frame->width(),this->frame->height());
 	viewer->updateGL();
-
 	//Draw error signal
 	customPlot->graph(0)->setData(xQ.getVector(), yQ.getVector());
-	customPlot->graph(1)->setData(xQ.getVector(), yposeTQ.getVector());
+	//customPlot->graph(1)->setData(xQ.getVector(), yposeTQ.getVector());
 	customPlot->replot(QCustomPlot::rpImmediate);
 	
-	return make_tuple( poseErr, d, factor);
+	return make_tuple(poseErr, d, factor);
 }
 
 tuple< QVec, PointSeq>  SpecificWorker::initMapError()
@@ -439,34 +448,26 @@ QVec SpecificWorker::getInitialSample()
 
 double SpecificWorker::distance(const MatrixXf &percept, const MatrixXf &cloud, Nabo::NNSearchF *perceptTree)
 {
-	const int K = 1;
-// 	VectorXi indices(K);
-// 	VectorXf dists(K);
-	
+	const int K = 1;	
 	MatrixXi indicesC(K,cloud.cols());
 	MatrixXf distsC(K,cloud.cols());
 	double sum=0;
 	
+	qDebug() << __FUNCTION__ << "hola" << 	cloud.cols() << cloud.rows() << percept.cols() << percept.rows();
+	
 	perceptTree->knn(cloud, indicesC, distsC, K);
+	qDebug() << __FUNCTION__ << "hola";
+
 	sum += distsC.colwise().sum().sum();
 	
-// 	for( uint i=0; i<cloud.cols(); i++ )
-// 	{
-// 		perceptTree->knn(cloud.col(i), indices, dists, K);
-// 		sum += dists(0);
-// 	}
-
+	qDebug() << __FUNCTION__ << "hola";
+	
 	MatrixXi indicesP(K,percept.cols());
 	MatrixXf distsP(K,percept.cols());
 	Nabo::NNSearchF* nns = Nabo::NNSearchF::createKDTreeLinearHeap(cloud);
 	nns->knn(percept, indicesP, distsP, K);
 	sum += distsP.colwise().sum().sum();
 	
-// 	for( uint i=0; i<percept.cols(); i++ )
-// 	{
-// 		nns->knn(percept.col(i), indices, dists, K);
-// 		sum += dists(0);
-// 	}
 	return sum;
 }
 

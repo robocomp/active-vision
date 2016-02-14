@@ -43,15 +43,15 @@ public:
   /// Parameters for plane filtering
   typedef struct{
     // Parameters for vanilla FSPF
-    unsigned int maxPoints = 2000;
+    unsigned int maxPoints = 1000;
     unsigned int numSamples = 20000;
     unsigned int numLocalSamples = 80;
     unsigned int planeSize = 100;
     float WorldPlaneSize = 50;
     float maxError = 20;
-    float minInlierFraction = 2;
+    float minInlierFraction = 0.8;
     float maxDepthDiff = 1800;
-    unsigned int numRetries = 2;
+    unsigned int numRetries = 3;
     
     // Parameters for polygonization
     bool runPolygonization =false;

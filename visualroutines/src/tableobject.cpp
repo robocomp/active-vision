@@ -38,13 +38,21 @@ void TableObject::setPose(const QVec& pose)
 	innerModel->updateTransformValues("vtable_t", pose.x(), pose.y(), pose.z(), pose.rx(), pose.ry(), pose.rz());
 }
 
-void TableObject::orientedPatches(const RoboCompRGBD::PointSeq &points)
+RoboCompRGBD::PointSeq TableObject::orientedPatches(const RoboCompRGBD::PointSeq &points)
 {
 	vector< vector3f > filteredPointCloud, pointsNormals ,outlierCloud;
   vector< vector2i > pixelLocs;
   vector< PlanePolygon > polygons;
 	planeFilter->GenerateFilteredPointCloud(points, filteredPointCloud, pixelLocs, pointsNormals, outlierCloud, polygons); 
 	qDebug() << __FUNCTION__ << points.size() << filteredPointCloud.size() << pixelLocs.size() << pointsNormals.size() << polygons.size();
+	RoboCompRGBD::PointSeq res;
+	RoboCompRGBD::PointXYZ q;
+	for( auto p: filteredPointCloud)
+	{
+		q.x=p[0];q.y=p[1];q.z=p[2];
+		res.push_back(q);
+	}
+	return res;
 }
 
 /**
@@ -73,7 +81,7 @@ RoboCompRGBD::PointSeq TableObject::filterTablePoints(const RoboCompRGBD::PointS
 		for (int j=0; j< size.width; j+=4) 
 		{
 			//qDebug() << __FUNCTION__ << depth.at<uchar>(i,j) << depthF.at<uchar>(i,j);
-			if( depthF.at<uchar>(i,j) > 0 )
+//			if( depthF.at<uchar>(i,j) > 0 )
 			{
 				RoboCompRGBD::PointXYZ p = points[j+i*size.width];
 				QVec pw = innerModel->transform("world", QVec::vec3(p.x,p.y,p.z),"rgbd"); 			

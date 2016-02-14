@@ -42,7 +42,7 @@ class TableObject
 		QVec getSample(double factor=0.0);
 		QVec getInitialPose(float r);
 		inline QVec getPose() { return currentPose;};
-		void orientedPatches(const RoboCompRGBD::PointSeq &points);
+		RoboCompRGBD::PointSeq orientedPatches(const RoboCompRGBD::PointSeq &points);
 		
 	private:
 		InnerModel *innerModel;

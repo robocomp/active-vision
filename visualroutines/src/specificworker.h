@@ -82,8 +82,8 @@ private:
 	tuple< QVec, double > metropolis( double error, const QVec& pose, bool reset = false);
 	QVec getInitialSample();
 	tuple< Mat, Mat, Mat, PointSeq > renderAndGenerateImages();
-	tuple< double, double, double > experiment(const QVec& correctPose, const PointSeq &percept, Nabo::NNSearchF *nns);
-	tuple< QVec, PointSeq, Nabo::NNSearchF* > initExperiment(float initialRange);
+	tuple< double, double, double > experiment(const QVec& correctPose, const MatrixXf& percept, Nabo::NNSearchF* nns);
+	tuple< QVec, MatrixXf, Nabo::NNSearchF* > initExperiment(float initialRange);
 	tuple<double, double> mapError(const QVec &newPose, const PointSeq &groundTruth, const QVec &correctPose);
 	tuple< QVec, PointSeq>  initMapError();
 
@@ -100,7 +100,6 @@ private:
 	InnerModelViewer *innerViewer;
 	
 	MatrixXf perceptE;
-
 };
 
 #endif

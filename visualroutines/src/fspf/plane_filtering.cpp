@@ -133,6 +133,9 @@ void PlaneFilter::PointCloudFromRaster(const RoboCompRGBD::PointSeq &points, vec
 
 void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &points, vector< vector3f >& filteredPointCloud, vector< vector2i >& pixelLocs, vector< vector3f >& pointCloudNormals, vector< vector3f >& outlierCloud, vector< PlanePolygon >& polygons)
 { 
+	
+	//std::cout << __FUNCTION__ << " " << points.size() << std::endl;
+	
   planeFilteringTimer.start();
   
   polygons.clear();
@@ -162,7 +165,7 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
   
   float sampleRadiusHFactor = filterParams.WorldPlaneSize*320/(4.0*tan(RAD(57.00/2)));
   float sampleRadiusVFactor = filterParams.WorldPlaneSize*240/(4.0*tan(RAD(43.0/2)));
-  
+	
   Vector3f p1, p2, p3, p;
   vector2i l1, l2, l3, l;
   
@@ -173,8 +176,7 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
   int sampleRadiusH, sampleRadiusV, rMin, rMax, cMin, cMax, dR, dC;
   
   for(unsigned int i=0; i<filterParams.numSamples && numPoints<filterParams.maxPoints; i++)
-	{
-    
+	{		
     //generate random point p1 anywhere on image
     if(!sampleLocation(points, ind1, l1.y, l1.x, p1, planeSizeH, h2, planeSizeH, w2))
       continue;
@@ -186,8 +188,9 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
     //generate random point p3 within max distance params.planeSize from p1
     if(!sampleLocation(points, ind3, l3.y, l3.x, p3, l1.y-planeSizeH, planeSize, l1.x-planeSizeH, planeSize))
       continue;
-    
-   // qDebug() << "p1" << p1.x() << p1.y() << p1.z() << "p2"  << p2.x() << p2.y() << p2.z();
+		
+    //std::cout << "p1 " << p1.x() <<" "<< p1.y() <<" "<< p1.z() <<" "<< " p2 "  << p2.x() <<" "<< p2.y() <<" "<< p2.z() << 
+		//					 " p3 "  << p3.x() <<" "<< p3.y() <<" "<< p3.z() << std::endl;
     
     //Generate Plane normal (n) and distance (d) from origin (distance-normal parameterization of plane)
     Vector3f n = ((p1-p2).cross(p3-p2)).normalized();
@@ -202,7 +205,8 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
     cMax = min(320-1,l1.x+sampleRadiusH);
     dR = rMax-rMin;
     dC = cMax-cMin;
-    
+  
+	
     if(sampleRadiusH<2.0 || sampleRadiusV<2.0){
       //printf("FSPF error %d,%d %f,%f,%f %f\u00b0, %f, %d, %f\n",sampleRadiusH,sampleRadiusV,n.x(),n.y(),n.z(),DEG(depthCam->fovH),filterParams.WorldPlaneSize,depthCam->width, meanDepth);
       continue;
@@ -211,9 +215,12 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
     int inliers = 0, outliers = 0;
     neighborhoodInliers.clear();
     neighborhoodPixelLocs.clear();
+			
+   
     for(unsigned int j=0; outliers<maxOutliers && j<filterParams.numLocalSamples; j++)
     {
       //generate random point p within max distance params.planeSize from p1
+	
       int ind;
       if(!sampleLocation(points, ind, l.y, l.x, p, rMin, dR, cMin, dC))
         continue;
@@ -232,6 +239,7 @@ void PlaneFilter::GenerateFilteredPointCloud(const RoboCompRGBD::PointSeq &point
     }
     if(inliers>=minInliers && inliers>3)
 		{
+		
       //==Polygonization==
       if(filterParams.runPolygonization)
       {
